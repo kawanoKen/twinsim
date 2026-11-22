@@ -74,6 +74,30 @@
 - `tasks.json` の `3_dwell`: 歩く状態と部屋の中のほかの全部の状態にした（前は止まる状態を並べていて、倉庫の `work`・`wait` が入っていなかった。`warehouse_picking` の結果が変わる）。
 - `summary.json`: `inputs.services`、`state_seconds` に新しい状態。`validity.json`: `group_formation`（密度ごとの横の広がり・仲間の間を横切った回数）、2 人連れの `by_relation`。
 
+## 使える行動の目的（1.2.0）
+
+人の流れの行き先（[`destinations[]`](config-reference.md#destinations) の `to` など）に書けるもの。太字は 1.2 で足したもの。
+
+| 行動 | 書き方 | 付属の空間の場所の例 |
+|---|---|---|
+| 出ていく | `exit`・`spawn` の場所 | office `south_exit`、hospital `west` |
+| EV に乗る（降りてくる人も） | `"elevator"` と [`elevator`](config-reference.md#elevator) の設定。降りる人は `elevator.alight` | office `EV1`・`EV2`、hospital `EV` |
+| ゲートを通る | `via: [ゲート]`（途中で通る） | office `gate` |
+| 立ち寄って止まる | `spot`・`prop` の場所と `dwell`。状態は受付 `reception`・案内板 `sign_check`・ほかは `dwell`（`state` で名前を付けられる） | office `reception_w1`・`lounge_1`・`sign` |
+| 待ち合わせ | [`meet`](config-reference.md#meet)（先に着いた人が待ち、同行者があとから来る。状態 `companion_wait`） | 止まる場所のどれでも |
+| 続けて次の行き先へ | `then` | — |
+| **窓口で応対を受ける** | `service` の場所と [`services`](config-reference.md#services)。待ち方は、列に並ぶ（`line`）・着いた順に待つ（`area`）・座って呼ばれるのを待つ（`call`） | office `cafe`、hospital `front_desk`・`cashier`・`pharmacy`、warehouse `time_clock` |
+| **作業点で作業する**（定員と列のある立ち作業） | `service` の場所と `services` の `state: work` | warehouse `packing`（梱包の台 4 つ） |
+| **座る**（埋まっていれば近くに立つ。仲間は隣の席） | `seats` の場所と `dwell` | office `cafe_seats`（ソファ）、hospital `lobby_seats`・`clinic_seats`、warehouse `break_seats` |
+| **部屋に入る**（中は映らない。同じ人の番号で出てくる） | `room` の場所と [`rooms`](config-reference.md#rooms)（扉の前で待つか、`call` で呼ばれて入る） | hospital `consult_1`〜`5`・`other_clinics` |
+| **何か所かを順に回る** | `visits: n`（名前の頭が同じ候補から n か所を選び、番号の順に回る） | warehouse `pick_1`〜`12` |
+| **持ち場にずっといる**（店員） | `spot` の場所に長い `dwell`・`state: work`・人の種類 `clerk` | office `cafe_clerk_1`・`cafe_clerk_2` |
+
+- グループ: 窓口では先導の人だけが応対を受け、仲間は近く（`aside`）で待つ。部屋にはグループが一緒に入って一緒に出る。
+- 窓口・部屋・座る場所は、空間の側にも書く（[spec.md](spec.md) の 1）。付属の空間の場所の名前は [config-reference.md の「場所の名前」](config-reference.md#場所の名前)。
+- 組み合わせの例: `hospital_outpatient`（受付で番号札 → 待合に座る → 診察室に呼ばれて入る → 会計 → 薬）、`office_lunch`（ゲート・EV → カフェの列 → ソファ）、
+  `warehouse_shift`（打刻機の列 → 指示を待つ → 棚を回る → 梱包の台）。
+
 ## 1.1 との違い
 
 - **同じ設定と種でも、人の動きが 1.1 と違うことがある。** グループのあるテンプレートは、関係を引くので乱数の順が変わる。グループの持ち場・EV の前の直し（5.13）・
@@ -145,6 +169,7 @@
   正解の枠の重なりを目で確かめた（5.10〜5.12）。
 - 直したあと（[5.14](validity.md#514-描画の残りの直し-席の前部屋の中の点の重なりカフェの店員と機械122026-11-18)）、昼の `CamCafe` 30 秒と外来の `CamWaiting` 30 秒（描画の注釈も）を描いて、カフェの店員・飲み物の機械の向き・台の上の物と、
   座っている人の描画の注釈（`labels/`）の枠を確かめた（計算の枠との IoU は座っている間の中央 0.72、0.5 未満なし）。
+- 見本の動画（`office_lunch` の `CamCafe` の 20 秒に正解の枠を重ねたもの）を、GitHub の Releases のこの版に `twinsim-sample.mp4` として付けた（`tools/release_sample.py`）。
 - 1.1 の素材 v6 のような、描画した素材を検出器・追跡器と突き合わせる確かめは、1.2 ではしていない。
 
 ## 既知の制限

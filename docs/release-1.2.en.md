@@ -74,6 +74,30 @@ It summarises the implementation and changes since 1.1 (2026-11-12) and the resu
 - `3_dwell` in `tasks.json`: now every state except the walking states and inside a room (before, it listed stopping states and missed the warehouse's `work` and `wait`; results of `warehouse_picking` change).
 - `summary.json`: `inputs.services` and new states in `state_seconds`. `validity.json`: `group_formation` (lateral spread by density, crossings between members) and `by_relation` for dyads.
 
+## Trip purposes available (1.2.0)
+
+What can be written as a destination of a stream (`to` in [`destinations[]`](config-reference.en.md#destinations), and others). Bold rows were added in 1.2.
+
+| Behaviour | How to write it | Examples in the bundled spaces |
+|---|---|---|
+| Leave | an `exit` or `spawn` place | office `south_exit`, hospital `west` |
+| Take an elevator (and people getting off) | `"elevator"` with the [`elevator`](config-reference.en.md#elevator) settings; people getting off are `elevator.alight` | office `EV1`, `EV2`, hospital `EV` |
+| Pass a gate | `via: [gate]` (passed on the way) | office `gate` |
+| Stop by | a `spot` or `prop` place with `dwell`. The state is `reception` at reception, `sign_check` at a sign and `dwell` elsewhere (`state` can name it) | office `reception_w1`, `lounge_1`, `sign` |
+| Meet someone | [`meet`](config-reference.en.md#meet) (the first to arrive waits and the companion comes later; state `companion_wait`) | any stopping place |
+| Go on to the next destination | `then` | — |
+| **Be served at a counter** | a `service` place with [`services`](config-reference.en.md#services). Waiting is a queue (`line`), first come first served in an area (`area`) or seated until called (`call`) | office `cafe`, hospital `front_desk`, `cashier`, `pharmacy`, warehouse `time_clock` |
+| **Work at a work point** (standing work with a capacity and a queue) | a `service` place with `state: work` in `services` | warehouse `packing` (four packing tables) |
+| **Sit** (stand nearby if all seats are taken; mates take the next seats) | a `seats` place with `dwell` | office `cafe_seats` (sofas), hospital `lobby_seats`, `clinic_seats`, warehouse `break_seats` |
+| **Go into a room** (not seen inside; comes out with the same person number) | a `room` place with [`rooms`](config-reference.en.md#rooms) (wait at the door, or be called in with `call`) | hospital `consult_1`–`5`, `other_clinics` |
+| **Visit several places in order** | `visits: n` (choose n of the candidates sharing a name prefix and visit them in number order) | warehouse `pick_1`–`12` |
+| **Stay at a post** (staff) | a `spot` place with a long `dwell`, `state: work` and person type `clerk` | office `cafe_clerk_1`, `cafe_clerk_2` |
+
+- Groups: at a counter only the leader is served and the mates wait nearby (`aside`). A group goes into a room together and comes out together.
+- Counters, rooms and seats are also written in the space ([spec.en.md](spec.en.md), section 1). The place names of the bundled spaces are in ["Place names" in config-reference.en.md](config-reference.en.md#place-names).
+- Examples of combinations: `hospital_outpatient` (ticket at reception → sit in the waiting area → called into a consultation room → cashier → pharmacy), `office_lunch` (gates and elevators → queue at the cafe → sofas),
+  `warehouse_shift` (queue at the time clock → wait for instructions → visit shelves → packing tables).
+
 ## Differences from 1.1
 
 - **With the same configuration and seed, the movement can differ from 1.1.** Templates with groups draw a relation, so the order of random numbers changes. Group slots, the elevator fixes (5.13)
@@ -145,6 +169,7 @@ What happens at counters, seats, rooms and work points (waiting times, seats, sh
   and the ground-truth boxes overlaid (5.10–5.12).
 - After the fixes ([5.14](validity.en.md#514-remaining-rendering-fixes-overlaps-at-seat-fronts-and-room-points-staff-and-a-machine-at-the-cafe-12-2026-11-18)), 30 s of `CamCafe` at lunchtime and 30 s of `CamWaiting` for the outpatients (with rendered annotations) were rendered to check the cafe staff, the direction of the drinks machine, the items on the ledge
   and the rendered annotation boxes (`labels/`) of seated people (IoU with the simulation boxes: median 0.72 while seated, none under 0.5).
+- A sample video (20 s of `CamCafe` in `office_lunch` with the ground-truth boxes overlaid) is attached to this version in GitHub Releases as `twinsim-sample.mp4` (`tools/release_sample.py`).
 - A check that matches rendered material against a detector and tracker, like corpus v6 for 1.1, was not done for 1.2.
 
 ## Known limitations

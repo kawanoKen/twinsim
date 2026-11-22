@@ -19,6 +19,9 @@ From Python code (JupyterLab): simulate → ground-truth labels → render → d
 
 Screen recordings of twinsim 1.1.0, shown as GIFs at 2× speed (waits for simulation and rendering are fast-forwarded further; the mouse cursor was drawn into the recording).
 
+Sample video (made with the latest version): [twinsim-sample.mp4](https://github.com/fujisawa-yoshihiko/twinsim/releases/latest/download/twinsim-sample.mp4). 20 s of office lunchtime (`office_lunch`, seed 1) from `CamCafe` with the ground-truth boxes (`mot/`) overlaid.
+It is remade with `tools/release_sample.py` and attached to GitHub Releases each time a version is released (how it was made is in `twinsim-sample.json` in the same place).
+
 ## Installing
 
 ```bash

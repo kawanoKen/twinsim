@@ -19,6 +19,9 @@ Python のコード（JupyterLab）から、計算 → 正解ラベル → 描�
 
 twinsim 1.1.0 の画面の録画を 2 倍速の GIF にしたもの（計算と描画の待ち時間はさらに早送り。マウスのカーソルは録画の中で描いたもの）。
 
+見本の動画（いちばん新しい版で作ったもの）: [twinsim-sample.mp4](https://github.com/fujisawa-yoshihiko/twinsim/releases/latest/download/twinsim-sample.mp4)。オフィスの昼（`office_lunch`、種 1）を `CamCafe` で撮った 20 秒に、正解の枠（`mot/`）を重ねたもの。
+版を出すたびに `tools/release_sample.py` で作り直して GitHub の Releases に付ける（作り方の記録は同じ所の `twinsim-sample.json`）。
+
 ## 入れ方
 
 ```bash

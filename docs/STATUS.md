@@ -57,6 +57,10 @@
   v1.2b で外来の 2 人連れ 15/16 は種 12 の待合の混雑（付き添いが最大 18 秒遅れ）、横の広がり 15/16 は種 10 の境目（5.14・既知の制限に）。release_check 通過（232 件）
 - 11/19: 1.2.0 を出した（ユーザーの確認のうえ）。crowd-1.2 を 52c48d0 まで push・CI 通過、main を 52c48d0 へ早送り、タグ v1.2.0（注釈付き）、GitHub の Releases（本文は tools/release_notes.py）。
   出す前に 1.1 から後の差分とコミットのメッセージに企業・建物の名前がないことを確かめた。タグから pip で入れて動くことも確かめた。~/twinsim-lib は main に戻した。
+- 11/22: 版の見本の動画（ユーザーの確認のうえ）。tools/release_sample.py がタグのコードで office_lunch 種 1 の CamCafe をいちばん混む 20 秒だけ描き、正解の枠と版の番号を重ねて
+  Releases に twinsim-sample.mp4・twinsim-sample.json として付ける。README のリンクは releases/latest/download/ で、いつも最新の版の見本を指す。版の出し方（docs/architecture.md）の最後の手順に入れた（GPU を使うので CI では作らない）。
+  1.2.0 の分は GPU 2 で作った（計算 228 秒・描画 193 秒、800.2 秒から、1.8 MB）。置き場所は ~/dt-data/twinsim/samples/v1.2.0/。
+  リリースノートに「使える行動の目的（1.2.0）」の表を足し、Releases の本文も作り直した。
 - 次: 1.3（docs/roadmap.md の「1.2 から送るもの」と 2 台以上のカメラ）。始める前に目標と決めることをユーザーと決める。
 
 ## 2026-11-12（1.1 の準備、ブランチ crowd-cfsm）

@@ -66,3 +66,6 @@ uv run --group gui-test python tools/gui_shot.py [出力] [ポート]   # 画面
 - 出す: GitHub の CI が通ったら `main` に入れ、タグ `vX.Y.Z` を付け、GitHub の Releases に載せる
   （`uv run python tools/release_notes.py X.Y.Z > 本文.md` で相対リンクをタグの URL に直してから、`gh release create vX.Y.Z --title "twinsim X.Y.Z" --notes-file 本文.md`。英語版は本文の最初のリンクから）。
   入れるときは `pip install "git+https://github.com/fujisawa-yoshihiko/twinsim.git@vX.Y.Z"` で版を選べる。
+- 見本の動画: Isaac Sim を起動して（`./isaac_up.sh`）、`uv run python tools/release_sample.py X.Y.Z`。タグの版のコードのときだけ、計算・描画し、正解の枠と版の番号を重ねた
+  `twinsim-sample.mp4` と作り方の記録 `twinsim-sample.json` を Releases の vX.Y.Z に付ける（同じ名前は差し替え）。README のリンク（`releases/latest/download/twinsim-sample.mp4`）は
+  いつも最新の版の見本を指す。GPU は起動を含めて約 10 分（共用なので空きと GPU の確認を取ってから）。GitHub の CI には GPU がないので、自動では作らない。

@@ -66,3 +66,7 @@ uv run --group gui-test python tools/gui_shot.py [output] [port]   # screen chec
 - Publishing: when GitHub CI passes, merge into `main`, tag `vX.Y.Z` and publish it under GitHub Releases
   (turn the relative links into URLs at the tag with `uv run python tools/release_notes.py X.Y.Z > notes.md`, then `gh release create vX.Y.Z --title "twinsim X.Y.Z" --notes-file notes.md`; the English notes are linked from the first line).
   Users can pick a version with `pip install "git+https://github.com/fujisawa-yoshihiko/twinsim.git@vX.Y.Z"`.
+- Sample video: start Isaac Sim (`./isaac_up.sh`) and run `uv run python tools/release_sample.py X.Y.Z`. Only when the code is that of the tag, it simulates and renders, and attaches
+  `twinsim-sample.mp4` (with the ground-truth boxes and the version overlaid) and the record of how it was made, `twinsim-sample.json`, to vX.Y.Z in Releases (replacing files of the same name).
+  The README link (`releases/latest/download/twinsim-sample.mp4`) always points to the sample of the latest version. It takes about 10 minutes of GPU time including startup (the GPU is shared,
+  so check that it is free and confirm which GPU first). GitHub CI has no GPU, so it is not made automatically.
