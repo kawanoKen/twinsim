@@ -20,6 +20,7 @@ Two trackers are added.
 |---|---|---|
 | 2026-11-16 | 1 done | `camera_groups` in the scenario; `twinsim/bev/` (`calib`, `groups`, `io`, `detect` (`gt_boxes`, `external`), `trackers/a`, `evaluate`, `synthetic`); `bev-detect`, `bev-track`, `bev-eval`; `tests/test_bev.py`; documents ([bev-tracking.en.md](bev-tracking.en.md), `formats` and `config-reference` in both languages). All tests and ruff pass |
 | 2026-11-16 | part of 2 | The PeopleNet detections of scene 2 were loaded with `external`; A gives the same IDs in every frame as the earlier implementation, with positions within 0.0005 m (the evaluation also gives the same values as motmetrics). `detect peoplenet` remains |
+| 2026-11-24 | 2 done | `detect peoplenet` (`twinsim/bev/deepstream.py`: DeepStream's `deepstream-app` per group, only the detections written). On scene 2 every box equals the earlier experiment's, and A reproduces gate 0.761, elevator hall 0.637 (0.768, 0.699 with the exclusion rules) (one GPU, 40 s). Boxes are written with 6 decimals (rounding to 2 changed A's values slightly) |
 | 2026-11-24 | Upstream 1.2.0 merged | Rebased onto `upstream/main` (v1.2.0). Spaces written in the config are read from `scenario_resolved.json`; people inside rooms (`in_room`) are left out of the ground truth. All tests (241) and ruff pass |
 
 ## 1. What is known so far (results of the earlier experiments)

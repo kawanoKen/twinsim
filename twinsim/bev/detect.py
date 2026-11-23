@@ -1,8 +1,8 @@
 """検出: 各カメラの人の枠を bev_dets/<検出器>/<カメラ>.txt に置く（形は io.DET_COLUMNS）。
 
   gt_boxes  正解の枠（mot/<カメラ>.txt。人を半径 0.25 m の箱とみなした近似）に、ずれ・見落とし・誤検出を加える。描画も GPU も要らない
+  peoplenet 描画した動画に PeopleNet（DeepStream のコンテナ、GPU）をかける（deepstream.py）。群ごとに 1 回
   external  外で作った検出を読み込む（同じ形の CSV を <検出器>/<カメラ>.txt に置いたフォルダ）
-（PeopleNet（DeepStream）は段階 2 で足す。）
 """
 
 import json
@@ -15,7 +15,7 @@ import numpy as np
 from .groups import groups as load_groups
 from .io import load_dets, open_run, run_space, version, write_dets
 
-DETECTORS = ("gt_boxes", "external")
+DETECTORS = ("gt_boxes", "peoplenet", "external")
 
 
 def gt_boxes(run, gt, f0, n_frames, cam, vis_min=0.4, jitter_px=0.0, miss=0.0, fp_per_frame=0.0, rng=None):
@@ -49,18 +49,37 @@ def gt_boxes(run, gt, f0, n_frames, cam, vis_min=0.4, jitter_px=0.0, miss=0.0, f
 
 def detect(run_dir, detector="gt_boxes", group_names=None, cameras=None, name=None, source=None, seed=0, **opts):
     """検出を bev_dets/<name>/ に書く（name の既定は検出器の名前）。cameras を省くと、群のカメラ全部。
-    gt_boxes の opts: vis_min・jitter_px・miss・fp_per_frame。external: source（同じ形の CSV のフォルダ）。"""
+    gt_boxes の opts: vis_min・jitter_px・miss・fp_per_frame。peoplenet: gpu・settings（PGIE の上書き）・image・models・keep_raw。
+    external: source（同じ形の CSV のフォルダ）。"""
     if detector not in DETECTORS:
         raise ValueError(f"検出器 {detector} はない（あるのは {', '.join(DETECTORS)}）")
     run, gt, f0, n_frames = open_run(run_dir)
+    grps = load_groups(gt, group_names, run_space(run, gt))
     if cameras is None:
-        cameras = sorted({c for g in load_groups(gt, group_names, run_space(run, gt)).values() for c in g.cameras})
+        cameras = sorted({c for g in grps.values() for c in g.cameras})
     out = run / "bev_dets" / (name or detector)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     rng = np.random.default_rng(seed)
-    n = 0
-    for cam in cameras:
+    n, extra = 0, {}
+    if detector == "peoplenet":  # 群ごとに 1 回（外の実験と同じ組と順）。前の群で済んだカメラは除く
+        from .deepstream import peoplenet
+        chunks, done = [], set()
+        for g in grps.values():
+            cams = [c for c in g.cameras if c in cameras and c not in done]
+            if cams:
+                chunks.append(cams)
+                done.update(cams)
+        rest = [c for c in cameras if c not in done]
+        if rest:
+            chunks.append(rest)
+        rows, extra = peoplenet(run, gt, chunks, out, **opts)
+        opts = {k: v for k, v in opts.items() if k in ("gpu", "settings")}
+        for cam in cameras:
+            r = [q for q in rows[cam] if q[0] < n_frames]
+            write_dets(out / f"{cam}.txt", r)
+            n += len(r)
+    for cam in (cameras if detector != "peoplenet" else []):
         if detector == "gt_boxes":
             rows = gt_boxes(run, gt, f0, n_frames, cam, rng=rng, **opts)
             write_dets(out / f"{cam}.txt", rows)
@@ -73,6 +92,7 @@ def detect(run_dir, detector="gt_boxes", group_names=None, cameras=None, name=No
                 shutil.copyfile(src, out / f"{cam}.txt")
             n += sum(len(v) for v in load_dets(out, [cam]).values())
     info = {"detector": detector, "cameras": cameras, "options": {**opts, "seed": seed, **({"source": str(source)} if source else {})},
-            "frame_offset": f0, "frames": n_frames, "boxes": n, "elapsed_s": round(time.time() - t0, 2), "version": version()}
+            "frame_offset": f0, "frames": n_frames, "boxes": n, "elapsed_s": round(time.time() - t0, 2), "version": version(),
+            **({"deepstream": extra} if extra else {})}
     (out / "run.json").write_text(json.dumps(info, ensure_ascii=False, indent=1))
     return out, info

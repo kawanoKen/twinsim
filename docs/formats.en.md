@@ -247,8 +247,9 @@ Frames are 0-based video frames (counted from `frames[0]` of `render_log.json` w
 | File | Format | Contents |
 |---|---|---|
 | `calib/<camera>.json` | JSON | `P` (3×4, world metres → pixels), `K`, `width`, `height`, `fps`, `eye` (`twinsim.bev.write_calib`) |
-| `bev_dets/<detector>/<camera>.txt` | CSV | `frame, x1, y1, x2, y2, conf` (with a header line; boxes in pixels) |
-| `bev_dets/<detector>/run.json` | JSON | Detector, options, `frame_offset` (simulator frame of video frame 0), elapsed time, `version` (twinsim version and git hash) |
+| `bev_dets/<detector>/<camera>.txt` | CSV | `frame, x1, y1, x2, y2, conf` (with a header line; boxes in pixels, up to 6 decimals; 0-based video frames) |
+| `bev_dets/<detector>/run.json` | JSON | Detector, options, `frame_offset` (simulator frame of video frame 0), elapsed time, `version` (twinsim version and git hash). For `peoplenet`, also `deepstream` (container, model, detector settings, GPU, time per group) |
+| `bev_dets/peoplenet/_deepstream/<number>/` | text | The configuration `peoplenet` gave DeepStream for each group (`config_deepstream.txt`, `config_pgie.txt`) and its log (`run.log`); with `--keep-raw`, also the KITTI output (`kitti/`) |
 | `bev_tracks/<tracker>/<group>/bev.csv` | CSV | `frame, t, id, x, y, cov_xx, cov_xy, cov_yy, n_views, kind, delay`. `t` is simulator seconds, `cov_*` the position uncertainty (m²), `n_views` the number of cameras that saw the person in that frame, `kind` is `online` (available at that frame) or `corrected` (revised later), `delay` how many frames later it was available |
 | `bev_tracks/<tracker>/<group>/mot/<camera>.txt` | MOTChallenge | Per-camera boxes made from the floor positions (a cylinder 1.7 m tall with radius 0.3 m, projected and clipped to the image). `frame` is the simulator frame + 1, as in the ground-truth `mot/`; `conf` is 1, the last two are −1 |
 | `bev_tracks/<tracker>/<group>/aicity.txt`, `aicity_cameras.json` | AI City MTMC | Same format as the ground-truth `aicity/gt.txt` (`camera_id obj_id frame_id xmin ymin width height xworld yworld`). Camera numbers follow the order in the group |

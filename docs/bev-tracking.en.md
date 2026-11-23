@@ -19,6 +19,7 @@ Detection and tracking are separate steps, so trackers can be compared on the sa
    ```bash
    twinsim bev-detect runs/test                                   # from the ground-truth boxes (no GPU)
    twinsim bev-detect runs/test --name noisy --miss 0.1 --jitter-px 3 --fp-per-frame 0.5   # add misses, jitter and false positives
+   twinsim bev-detect runs/test --detector peoplenet --gpu 3   # PeopleNet on the rendered video (DeepStream container, GPU; once per group)
    twinsim bev-detect runs/test --detector external --name mydet --source <folder>          # detections made elsewhere (CSV in the same format)
    ```
 4. Tracking (`bev_tracks/<name>/<group>/`).
@@ -32,6 +33,16 @@ Detection and tracking are separate steps, so trackers can be compared on the sa
    ```
 
 From Python, call `detect`, `track`, `evaluate`, `synthetic_tracks`, `calib` and `groups` of `twinsim.bev`. File formats are in [section 12 of formats.en.md](formats.en.md#bev).
+
+## PeopleNet detections (`--detector peoplenet`)
+
+The rendered videos (`video/<camera>.mp4`) go through DeepStream's `deepstream-app` once per group, and only the detector's output is written (no tracker runs).
+The settings are those of the earlier experiment: PeopleNet v2.6.3 (ResNet-34, FP16), people only, NMS (top 100, IoU 0.5), input at the video's pixel size.
+
+- Needs: docker with the NVIDIA container runtime, the DeepStream container (`TWINSIM_DEEPSTREAM_IMAGE`, default `ghcr.io/nvidia/deepstream:9.2-triton-multiarch`),
+  and the model folder (`TWINSIM_DEEPSTREAM_MODELS` or `--models`, holding `PeopleNet2.6.3/resnet34_peoplenet.onnx` and `detector_labels.txt`; the TensorRT engine is built on first use and saved there, so it must be writable).
+- Choose one GPU with `--gpu` (no default; check `nvidia-smi` first). Population 1,200, 10 fps, 300 s, 10 cameras (2 groups of 5): about 40 s.
+- Boxes of every confidence are written; the threshold is a tracker setting (A's `det_conf`).
 
 ## Trackers
 
@@ -58,5 +69,5 @@ Settings are in `twinsim/bev/presets/<name>.json` (`--preset`). Durations are wr
 ## Checks
 
 - `tests/test_bev.py`: the projection agrees with twinsim's camera within 1e−6 pixels; tracks made from the ground truth give IDF1 and MOTA of 1; 20 % misses give recall 0.8; the number of ID switches matches; on a small scene A reaches IDF1 ≥ 0.95 from the ground-truth boxes.
-- Agreement with the earlier experiment (2026-11-16): on `office_gate_ev` (population 1,200, 10 fps, 300 s, 5 cameras per group), with PeopleNet detections on the rendered video, A gives the same IDs in every frame as the earlier implementation, with positions within 0.0005 m (output rounding).
+- Agreement with the earlier experiment (2026-11-16, 11-24): on the rendering of `office_gate_ev` (population 1,200, 10 fps, 300 s, 5 cameras per group), `--detector peoplenet` gives exactly the boxes of the earlier experiment. With them, A gives the same IDs in every frame as the earlier implementation, with positions within 0.0005 m (output rounding).
   IDF1 over the last 100 s (1 m, nobody excluded) is 0.761 for the gate group and 0.637 for the elevator hall; with the rules above, 0.768 and 0.699.

@@ -15,7 +15,7 @@
   python -m twinsim serve [--port 8770] [--url]       GUI と REST API（127.0.0.1 だけ、トークンつき）
   python -m twinsim show-space <空間> [--out 図.png]   真上の図に歩ける所・目盛り・候補・場所・ゾーンを重ねた図（spaces/<名前>/annotate.png）。
                                                    空間は名前・フォルダ・YAML か JSON のファイル。真上の図のない空間は、歩ける所の格子から平面図を描く
-  python -m twinsim bev-detect <結果の場所> [--detector gt_boxes|external] [--group 群] [--name 名前] [--source 場所] [--miss 0.1 ...]
+  python -m twinsim bev-detect <結果の場所> [--detector gt_boxes|peoplenet|external] [--gpu 番号] [--group 群] [--name 名前] [--source 場所] [--miss 0.1 ...]
                                                 各カメラの人の枠（bev_dets/<名前>/）。gt_boxes は正解の枠から（GPU なし）
   python -m twinsim bev-track <結果の場所> [--tracker a] [--group 群] [--dets 検出] [--preset 名前] [--param key=value ...] [--label 名前]
                                                 群ごとの床の上の追跡（bev_tracks/<名前>/<群>/）
@@ -123,6 +123,10 @@ def cli(argv):
     bd.add_argument("--miss", type=float, default=0.0)
     bd.add_argument("--fp-per-frame", type=float, default=0.0)
     bd.add_argument("--seed", type=int, default=0)
+    bd.add_argument("--gpu", type=int, help="peoplenet: 使う GPU の番号（nvidia-smi で空きを見てから）")
+    bd.add_argument("--models", help="peoplenet: モデルの置き場所（既定は TWINSIM_DEEPSTREAM_MODELS）")
+    bd.add_argument("--image", help="peoplenet: DeepStream のコンテナ（既定は TWINSIM_DEEPSTREAM_IMAGE）")
+    bd.add_argument("--keep-raw", action="store_true", help="peoplenet: DeepStream の KITTI の出力を消さずに残す")
     bt = sub.add_parser("bev-track")
     bt.add_argument("run_dir")
     bt.add_argument("--tracker", default="a")
@@ -204,7 +208,8 @@ def cli(argv):
         print("validity:", Path(a.run_dir).expanduser() / "validity.md")
     elif a.cmd == "bev-detect":
         from .bev import detect
-        opts = {} if a.detector != "gt_boxes" else {"vis_min": a.vis_min, "jitter_px": a.jitter_px, "miss": a.miss, "fp_per_frame": a.fp_per_frame}
+        opts = ({"vis_min": a.vis_min, "jitter_px": a.jitter_px, "miss": a.miss, "fp_per_frame": a.fp_per_frame} if a.detector == "gt_boxes" else
+                {"gpu": a.gpu, "models": a.models, "image": a.image, "keep_raw": a.keep_raw} if a.detector == "peoplenet" else {})
         out, info = detect(a.run_dir, a.detector, a.group, name=a.name, source=a.source, seed=a.seed, **opts)
         print(json.dumps({k: info[k] for k in ("detector", "cameras", "boxes", "elapsed_s")}, ensure_ascii=False))
         print("out:", out)

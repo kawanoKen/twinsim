@@ -1,6 +1,7 @@
 """床の上の追跡（twinsim.bev）の確かめ（CPU だけ、数秒）: 投影・camera_groups の検査・評価・A。"""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -9,7 +10,7 @@ from twinsim import api
 from twinsim.__main__ import main
 from twinsim.bev import detect, evaluate, groups, synthetic_tracks, track
 from twinsim.bev.calib import project, projection
-from twinsim.bev.io import gt_positions, open_run
+from twinsim.bev.io import gt_positions, load_dets, open_run
 from twinsim.camera import Camera
 from twinsim.scenario import load_scenario
 
@@ -103,3 +104,40 @@ def test_cli(run_dir, capsys):
     assert "IDF1" in capsys.readouterr().out
     assert json.loads((run_dir / "bev_tracks/a_noisy/gate/run.json").read_text())["params"]["max_age_s"] == 1.5
     assert main(["bev-track", str(run_dir), "--param", "no_such=1"]) == 1   # 知らない設定は誤り
+
+
+def test_peoplenet_without_gpu(run_dir, tmp_path, monkeypatch):
+    """peoplenet の流れ（設定を書く → docker → KITTI を読む → bev_dets/）を、docker の代わりに KITTI を書く関数で確かめる。"""
+    import subprocess
+
+    from twinsim.bev import deepstream
+
+    models = tmp_path / "models"
+    (models / deepstream.MODEL).mkdir(parents=True)
+    (models / deepstream.MODEL / deepstream.ONNX).write_bytes(b"")
+    (run_dir / "video").mkdir(exist_ok=True)
+    cams = CONFIG["camera_groups"]["gate"]["cameras"]
+    for c in cams:
+        (run_dir / "video" / f"{c}.mp4").write_bytes(b"")
+    calls, real_run = [], subprocess.run
+
+    def fake_run(cmd, **kw):
+        if cmd[0] != "docker":  # git など（version()）はそのまま
+            return real_run(cmd, **kw)
+        work = Path(cmd[cmd.index("-w") - 1].split(":")[0])
+        cfg = (work / "config_deepstream.txt").read_text()
+        calls.append((cmd, cfg))
+        assert "batch-size=5" in cfg and "[tracker]\nenable=0" in cfg and "topk=100" in (work / "config_pgie.txt").read_text()
+        # 源 1（G2）のコマ 3 に 1 つ、源 4（CamGate）のコマ 7 に 2 つ
+        (work / "kitti" / "00_001_000003.txt").write_text("Person 0.0 0 0.0 10.5 20.25 30.125 80.0 0 0 0 0 0 0 0 0.75\n")
+        (work / "kitti" / "00_004_000007.txt").write_text("Person 0.0 0 0.0 1 2 3 4 0 0 0 0 0 0 0 0.5\nPerson 0.0 0 0.0 5 6 7 8 0 0 0 0 0 0 0 0.25\n")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(deepstream.subprocess, "run", fake_run)
+    with pytest.raises(ValueError, match="--gpu"):
+        detect(run_dir, "peoplenet", models=str(models))
+    out, info = detect(run_dir, "peoplenet", gpu=3, models=str(models))
+    assert len(calls) == 1 and "device=3" in calls[0][0] and info["boxes"] == 3 and info["deepstream"]["gpu"] == 3
+    D = load_dets(out, cams)
+    assert D[3] == [("G2", (10.5, 20.25, 30.125, 80.0), 0.75)] and len(D[7]) == 2
+    assert not (out / "_deepstream" / "00" / "kitti").exists() and (out / "_deepstream" / "00" / "config_pgie.txt").exists()

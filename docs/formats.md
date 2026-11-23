@@ -247,8 +247,9 @@ while (ok := cap.read())[0]:
 | ファイル | 形 | 中身 |
 |---|---|---|
 | `calib/<カメラ>.json` | JSON | `P`（3×4。世界の m → 画素）・`K`・`width`・`height`・`fps`・`eye`（`twinsim.bev.write_calib`） |
-| `bev_dets/<検出器>/<カメラ>.txt` | CSV | `frame, x1, y1, x2, y2, conf`（見出しの行つき。枠は画素） |
-| `bev_dets/<検出器>/run.json` | JSON | 検出器・設定・`frame_offset`（動画の 0 コマ目のシミュレータのコマ）・かかった時間・`version`（twinsim の版と git のハッシュ） |
+| `bev_dets/<検出器>/<カメラ>.txt` | CSV | `frame, x1, y1, x2, y2, conf`（見出しの行つき。枠は画素、小数 6 桁まで。コマは動画の 0 始まり） |
+| `bev_dets/<検出器>/run.json` | JSON | 検出器・設定・`frame_offset`（動画の 0 コマ目のシミュレータのコマ）・かかった時間・`version`（twinsim の版と git のハッシュ）。`peoplenet` は `deepstream`（コンテナ・モデル・検出の設定・GPU・群ごとの時間）も |
+| `bev_dets/peoplenet/_deepstream/<番号>/` | テキスト | `peoplenet` が群ごとに DeepStream に渡した設定（`config_deepstream.txt`・`config_pgie.txt`）と記録（`run.log`）。`--keep-raw` なら KITTI の形の出力（`kitti/`）も |
 | `bev_tracks/<追跡器>/<群>/bev.csv` | CSV | `frame, t, id, x, y, cov_xx, cov_xy, cov_yy, n_views, kind, delay`。`t` はシミュレータの秒、`cov_*` は位置の誤差（m²）、`n_views` はそのコマで見えたカメラの数、`kind` は `online`（そのコマで出せた）か `corrected`（後から訂正した）、`delay` は出せたのが何コマ後か |
 | `bev_tracks/<追跡器>/<群>/mot/<カメラ>.txt` | MOTChallenge | 床の位置から作ったカメラごとの枠（背 1.7 m・半径 0.3 m の円柱を写した箱、画面で切る）。`frame` は正解の `mot/` と同じシミュレータのコマ＋1、`conf` は 1、後ろの 2 つは −1 |
 | `bev_tracks/<追跡器>/<群>/aicity.txt`・`aicity_cameras.json` | AI City の MTMC | 正解の `aicity/gt.txt` と同じ形（`camera_id obj_id frame_id xmin ymin width height xworld yworld`）。カメラの番号は群の中の順 |

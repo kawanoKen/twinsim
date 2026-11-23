@@ -62,15 +62,21 @@ def gt_positions(gt, f0, n_frames):
 
 # ---- 検出 ----
 
+def _num(v):
+    t = f"{float(v):.6f}".rstrip("0")
+    return t + "0" if t.endswith(".") else t
+
+
 def write_dets(path, rows):
-    """rows: [(frame, x1, y1, x2, y2, conf), ...] → CSV（見出しの行つき）。"""
+    """rows: [(frame, x1, y1, x2, y2, conf), ...] → CSV（見出しの行つき）。枠は画素で小数 6 桁まで（検出器の出した値を丸めない。
+    2 桁に丸めると、A の割り当てがまれに変わる）、末尾の 0 は書かない。"""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(DET_COLUMNS)
         for f, x1, y1, x2, y2, c in rows:
-            w.writerow([int(f), f"{x1:.2f}", f"{y1:.2f}", f"{x2:.2f}", f"{y2:.2f}", f"{c:.6f}"])
+            w.writerow([int(f), *(_num(v) for v in (x1, y1, x2, y2)), _num(c)])
 
 
 def load_dets(folder, cameras):

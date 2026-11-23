@@ -19,6 +19,7 @@
    ```bash
    twinsim bev-detect runs/test                                   # 正解の枠から（GPU なし）
    twinsim bev-detect runs/test --name noisy --miss 0.1 --jitter-px 3 --fp-per-frame 0.5   # 見落とし・ずれ・誤検出を足す
+   twinsim bev-detect runs/test --detector peoplenet --gpu 3   # 描画した動画に PeopleNet（DeepStream のコンテナ、GPU。群ごとに 1 回）
    twinsim bev-detect runs/test --detector external --name mydet --source 検出のフォルダ     # 外で作った検出（同じ形の CSV）
    ```
 4. 追跡（`bev_tracks/<名前>/<群>/`）。
@@ -32,6 +33,16 @@
    ```
 
 Python からは `twinsim.bev` の `detect`・`track`・`evaluate`・`synthetic_tracks`・`calib`・`groups` を呼びます。ファイルの形は [formats.md の 12](formats.md#bev)。
+
+## PeopleNet の検出（`--detector peoplenet`）
+
+描画した動画（`video/<カメラ>.mp4`）を、群ごとに 1 回 DeepStream の `deepstream-app` に通し、検出器の出力だけを書き出します（追跡器は動かさない）。
+設定は外の実験と同じです: PeopleNet v2.6.3（ResNet-34、FP16）、人だけ、NMS（上位 100 件、IoU 0.5）、入力は動画の画素の大きさのまま。
+
+- 要るもの: docker と NVIDIA のコンテナの実行環境、DeepStream のコンテナ（`TWINSIM_DEEPSTREAM_IMAGE`、既定 `ghcr.io/nvidia/deepstream:9.2-triton-multiarch`）、
+  モデルの置き場所（`TWINSIM_DEEPSTREAM_MODELS` か `--models`。`PeopleNet2.6.3/resnet34_peoplenet.onnx` と `detector_labels.txt` がある所。TensorRT のエンジンを初めに作って同じ所に置くので、書ける場所）。
+- GPU は `--gpu` で 1 枚を決めます（既定はない。`nvidia-smi` で空きを見てから）。在館 1,200 人・10 fps・300 秒・10 台（5 台 × 2 群）で 40 秒ほど。
+- 全部の確信度の枠を書きます。しきい値は追跡器の設定（A の `det_conf`）で決めます。
 
 ## 追跡器
 
@@ -58,5 +69,5 @@ Python からは `twinsim.bev` の `detect`・`track`・`evaluate`・`synthetic_
 ## 確かめ
 
 - `tests/test_bev.py`: 投影が twinsim のカメラと 1e−6 画素以内で一致、正解から作った追跡で IDF1・MOTA が 1、見落とし 20% で再現率 0.8、ID の取り違えの数が合う、小さな場面で A が正解の枠から IDF1 0.95 以上。
-- 外の実験との一致（2026-11-16）: `office_gate_ev`（在館 1,200 人、10 fps、300 秒、群ごとに 5 台）の描画に PeopleNet をかけた検出で、A の結果が外の実験の実装と全部のコマで同じ ID・位置の差 0.0005 m 以下（出力の丸め）になりました。
+- 外の実験との一致（2026-11-16、11-24）: `office_gate_ev`（在館 1,200 人、10 fps、300 秒、群ごとに 5 台）の描画で、`--detector peoplenet` の検出が外の実験の検出と全部の枠で同じ値になりました。その検出で、A の結果が外の実験の実装と全部のコマで同じ ID・位置の差 0.0005 m 以下（出力の丸め）になりました。
   後ろの 100 秒の IDF1（1 m、判定しない人なし）はゲートの群 0.761、EV 前の群 0.637、上の決まりで判定しない人を除くと 0.768・0.699 です。
