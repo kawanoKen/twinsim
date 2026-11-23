@@ -20,6 +20,7 @@
 |---|---|---|
 | 2026-11-16 | 1 済み | シナリオの `camera_groups`・`twinsim/bev/`（`calib`・`groups`・`io`・`detect`（`gt_boxes`・`external`）・`trackers/a`・`evaluate`・`synthetic`）・`bev-detect`・`bev-track`・`bev-eval`・`tests/test_bev.py`・文書（[bev-tracking.md](bev-tracking.md)、`formats`・`config-reference` の日英）。全部のテストと ruff が通る |
 | 2026-11-16 | 2 の一部 | 場面 2 の PeopleNet の検出を `external` で読み込み、A が外の実験の実装と全部のコマで同じ ID・位置の差 0.0005 m 以下になった（評価も motmetrics と同じ値）。残りは `detect peoplenet` |
+| 2026-11-24 | 本体 1.2.0 を取り込み | `upstream/main`（v1.2.0）の上に載せ直した。設定に書いた空間を `scenario_resolved.json` から読む、部屋の中の人（`in_room`）を正解から除く。全部のテスト（241）と ruff が通る |
 
 ## 1. これまでに分かっていること（外の実験の結果）
 
