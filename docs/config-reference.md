@@ -13,7 +13,7 @@ YAML でも同じ形で書けます。座標は世界の座標（m、Z が上）
 | 人 | [`space`](#space)・[`people`](#people)・[`demand`](#demand) |
 | 流れ | [`streams[]`](#streams)・[`origin`](#origin)・[`rate`](#rate)・[`destinations[]`](#destinations)・[`meet`](#meet) |
 | 設備 | [`elevator`](#elevator)・[`schedule`](#schedule)・[`alight`](#alight)・[`gates`](#gates)・[`services`](#services)・[`rooms`](#rooms) |
-| カメラと出力 | [`cameras[]`](#cameras)・[`render`](#render)・[`outputs`](#outputs) |
+| カメラと出力 | [`cameras[]`](#cameras)・[`camera_groups`](#camera-groups)・[`render`](#render)・[`outputs`](#outputs) |
 | 比較と確かめ | [`variants`](#variants)・[`validity`](#validity) |
 | そのほか | [`graph` など](#others) |
 | 共通 | [分布の書き方](#distributions)・[場所の名前](#places)・[計算の前の検査](#checks) |
@@ -38,6 +38,7 @@ YAML でも同じ形で書けます。座標は世界の座標（m、Z が上）
 | [`services`](#services) | オブジェクト | `{}` | 窓口ごとの応対の時間・呼び出し（1.2 から） |
 | [`rooms`](#rooms) | オブジェクト | `{}` | 部屋ごとのいる時間・定員・呼び出し（1.2 から） |
 | [`cameras`](#cameras) | 配列 | `[]` | カメラ |
+| [`camera_groups`](#camera-groups) | オブジェクト | なし | 視野の重なるカメラの群（床の上の追跡 `twinsim bev-*` が使う） |
 | [`render`](#render) | オブジェクト | 下を参照 | 描画 |
 | [`outputs`](#outputs) | 配列 | 全部 | 書き出すもの |
 | [`variants`・`variant`](#variants) | オブジェクト・文字列 | なし | 条件の比較 |
@@ -344,6 +345,27 @@ rooms:
 ]
 ```
 
+<a id="camera-groups"></a>
+
+## `camera_groups`
+
+視野の重なるカメラの群です。床の上（真上から見た図）の複数カメラの追跡（`twinsim bev-detect`・`bev-track`・`bev-eval`、[手順](bev-tracking.md)）は、群ごとに追跡して評価します。
+シミュレーションの結果は変わりません。書いた値は `ground_truth.json` の `camera_groups` に残ります。書かなければ、`cameras[]` の全部を 1 つの群 `all` とします。
+
+| キー | 型 | 既定 | 中身 |
+|---|---|---|---|
+| `<群の名前>.cameras` | 配列 | 必須 | 群のカメラの名前（`cameras[]` にあるもの） |
+| `<群の名前>.area` | `[[x, y], ...]` | なし | 評価領域の多角形（世界の m、3 点以上）。書かなければ、群のカメラのどれかから床が見える歩ける所 |
+| `<群の名前>.note` | 文字列 | なし | メモ |
+
+```json
+"cameras": [{"name": "CamGate"}, {"name": "CamLobby"}, {"name": "CamEV"}],
+"camera_groups": {
+  "lobby": {"cameras": ["CamGate", "CamLobby"], "area": [[-6.0, -6.0], [4.0, -6.0], [4.0, 10.0], [-6.0, 10.0]]},
+  "ev":    {"cameras": ["CamEV"]}
+}
+```
+
 <a id="render"></a>
 
 ## `render`
@@ -459,7 +481,7 @@ rooms:
 
 | 検査 | 例 |
 |---|---|
-| 知らないキー | 一番上のキーと、`cameras[]` のキー |
+| 知らないキー | 一番上のキーと、`cameras[]`・`camera_groups.<群>` のキー |
 | 値の範囲 | `duration_s` が正の数、`fps` が正の整数、`seed` が整数、`mot_stride`、`graph.cell_m` が空間の格子の倍数、`outputs`・`render.tint` の値 |
 | 名前 | `name` とカメラの名前は文字・数字・`_`・`-` だけ（ファイルの名前になるため） |
 | 場所の名前 | `origin`・`to`・`via`・`meet.via`・`cars`・`gates` のキー・`render.props` が空間にあるか。`via` はゲートか、`cars` は EV か |
@@ -467,6 +489,7 @@ rooms:
 | 種類の綴り | `rate` と `schedule` の `type`、`variant` が `variants` にあるか |
 | 座標 | `origin`・`meet.from` の形、歩ける所の中か、線の両端も含めて行き先まで歩いて行けるか |
 | カメラ | `name`、`eye`・`target` の形、同じ名前がないか、`eye` と `target` が同じ点でないか、天井より低いか（天井より上だと、映っていない人に正解の枠が付く） |
+| カメラの群 | 群の名前、`cameras` が `cameras[]` にあるか・同じカメラが 2 回ないか、`area` が 3 点以上の多角形か |
 | 組み合わせ | `aicity` には `mot` が要る、`meet` は流れの一番上の行き先にだけ書ける |
 
 次は検査しません。

@@ -50,6 +50,7 @@ def project(cam, pts):                       # pts: (N, 3) 世界の座標 → (
 | `logs/` | ゲートの通過記録・EV の運行記録（実データと同じ形）。`twinsim export-logs <結果>` で作る | 実データで合わせる（`calibrate`）の見本 |
 | `summary.json`・`scenario_resolved.json`・`.yaml` | 要約（人数・人の動き `motion`・着いたのに終わりまで外で待った人 `outside_at_end` など）と、既定を足したシナリオ（乱数の種を含む） | 作り直し・記録 |
 | `validity.*`・`preview.png` | 文献との比べ・確認の図 | 人の分布の妥当性 |
+| `calib/`・`bev_dets/`・`bev_tracks/`・`bev_eval/` | 床の上の複数カメラの追跡の投影行列・検出・追跡・評価（`twinsim bev-*` が書く。[12](#bev)） | 複数カメラの追跡の比べ |
 
 ## 2. `ground_truth.json`
 
@@ -60,6 +61,7 @@ def project(cam, pts):                       # pts: (N, 3) 世界の座標 → (
 | `tracks[名前]` | `[[x, y, yaw], …]`。k 番目は `people[名前].start_frame + k` のコマ（現れてから消えるまで） |
 | `moving[名前]` | `[0/1, …]`。そのコマに歩いているか（`tracks` と同じ長さ）。0.3 秒でならした速さが 0.2 m/s を超えたら 1、0.1 m/s を下回るか 2 コマ続けてほとんど動かなければ 0（2026-11-08 から。前は 1 コマの一歩が 0.2 m/s を超えたか）。`yaw` は歩いている間、ならした速さの向きへ回る |
 | `cameras[名前]` | カメラ（0 の表し方） |
+| `camera_groups[群]` | シナリオの `camera_groups`（視野の重なるカメラの群 `cameras` と評価領域 `area`）。書かなければ `{}` |
 | `gate_events` | `[{t, gate, lane, person, dir: in/out}]`。ゲートを通った時刻 |
 | `elevator_events` | `[{t, car, boarded: [名前], alighted: [名前]}]`。EV が着いた時刻と、乗った人・降りた人 |
 | `elevator_times`・`cars`・`spots`・`door` | EV の着く時刻、号機の扉の位置・定員、EV 待ちの立つ場所 |
@@ -234,3 +236,22 @@ while (ok := cap.read())[0]:
 | `ev_log.csv` | `time_s, car, boarded, alighted` |
 
 時刻は 2 つの記録の早い方を 0 にそろえる。形の見本は `twinsim export-logs <結果>` で作れる。
+
+<a id="bev"></a>
+
+## 12. 床の上の追跡（`twinsim bev-*` が書くもの）
+
+視野の重なるカメラの群（シナリオの `camera_groups`）ごとに、床の上（真上から見た図）の複数カメラの追跡を作って比べる。手順は [bev-tracking.md](bev-tracking.md)。
+コマは動画の 0 始まり（描画したなら `render_log.json` の `frames[0]` から数える。描画していなければシミュレータのコマ）。座標は世界の m。
+
+| ファイル | 形 | 中身 |
+|---|---|---|
+| `calib/<カメラ>.json` | JSON | `P`（3×4。世界の m → 画素）・`K`・`width`・`height`・`fps`・`eye`（`twinsim.bev.write_calib`） |
+| `bev_dets/<検出器>/<カメラ>.txt` | CSV | `frame, x1, y1, x2, y2, conf`（見出しの行つき。枠は画素） |
+| `bev_dets/<検出器>/run.json` | JSON | 検出器・設定・`frame_offset`（動画の 0 コマ目のシミュレータのコマ）・かかった時間・`version`（twinsim の版と git のハッシュ） |
+| `bev_tracks/<追跡器>/<群>/bev.csv` | CSV | `frame, t, id, x, y, cov_xx, cov_xy, cov_yy, n_views, kind, delay`。`t` はシミュレータの秒、`cov_*` は位置の誤差（m²）、`n_views` はそのコマで見えたカメラの数、`kind` は `online`（そのコマで出せた）か `corrected`（後から訂正した）、`delay` は出せたのが何コマ後か |
+| `bev_tracks/<追跡器>/<群>/mot/<カメラ>.txt` | MOTChallenge | 床の位置から作ったカメラごとの枠（背 1.7 m・半径 0.3 m の円柱を写した箱、画面で切る）。`frame` は正解の `mot/` と同じシミュレータのコマ＋1、`conf` は 1、後ろの 2 つは −1 |
+| `bev_tracks/<追跡器>/<群>/aicity.txt`・`aicity_cameras.json` | AI City の MTMC | 正解の `aicity/gt.txt` と同じ形（`camera_id obj_id frame_id xmin ymin width height xworld yworld`）。カメラの番号は群の中の順 |
+| `bev_tracks/<追跡器>/<群>/run.json` | JSON | 追跡器・群・設定（`preset` と `params`）・使った検出・1 コマあたりの時間（ms）・`version` |
+| `bev_eval/<名前>_<群>.json` | JSON | `metrics["1m"]`・`metrics["0.5m"]`: `IDF1`・`HOTA`・`DetA`・`AssA`・`MOTA`・`MODA`・`IDSW`・`Prec`・`Rec`・`BEV_err_m`（対応した組の位置の誤差）・`TP`・`FN`・`FP`・`n_gt`・`n_gt_ids`・`n_pred_ids`。`rules`（判定しない人の決まり）・`frames`・`version` |
+| `bev_eval/summary.csv` | CSV | `bev_eval/*.json` を 1 行ずつ（`label, tracker, group, kind, threshold, IDF1, …`） |

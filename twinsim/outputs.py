@@ -119,7 +119,7 @@ def write_all(sim, builder, spec, out_dir):
     shown = set(people)  # 計算の終わりの間際に降りて、まだ現れていない人は記録に入れない
     ev_events = [{**e, "alighted": [n for n in e["alighted"] if n in shown]} for e in sim.ev_events]
     gt = {"fps": fps, "total_frames": total, "seed": spec["seed"], "space": sp.name, "scenario": spec.get("name"),
-          "people": people, "cameras": cams, "tracks": tracks, "moving": moving,
+          "people": people, "cameras": cams, "camera_groups": spec.get("camera_groups") or {}, "tracks": tracks, "moving": moving,
           "elevator_times": sorted(x for c in sim.cars for x in c.arrivals if x < total / fps),
           "cars": {c.name: {"door": list(c.door), "inside": list(c.inside), "capacity": c.capacity} for c in sim.cars},
           "elevator_events": ev_events, "gate_events": sim.gate_events,

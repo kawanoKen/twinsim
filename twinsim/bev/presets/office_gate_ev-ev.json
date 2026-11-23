@@ -1,0 +1,18 @@
+{
+ "tracker": "a",
+ "note": "office_gate_ev の EV 前の群（5 台、待って乗る）で調整した値。検出は PeopleNet",
+ "note_en": "Tuned on the elevator-hall group of office_gate_ev (5 cameras, people wait and board); PeopleNet detections",
+ "params": {
+  "det_conf": 0.4,
+  "sig_ray": 0.2,
+  "sig_perp": 0.1,
+  "gate_m": 1.5,
+  "r_cluster": 1.2,
+  "r_suppress": 0.5,
+  "max_age_s": 1.0,
+  "probation_s": 0.3,
+  "sigma_a": 0.5,
+  "conf_new": 1.01,
+  "v_damp": 0.98
+ }
+}

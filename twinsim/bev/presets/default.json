@@ -1,0 +1,18 @@
+{
+ "tracker": "a",
+ "note": "ロビーの場面（7 台、在館の人が止まって話す）で調整した値。ほかの場面の出発点",
+ "note_en": "Tuned on the lobby scene (7 cameras, people stop and talk); the starting point for other scenes",
+ "params": {
+  "det_conf": 0.5,
+  "sig_ray": 0.2,
+  "sig_perp": 0.1,
+  "gate_m": 1.5,
+  "r_cluster": 1.2,
+  "r_suppress": 0.5,
+  "max_age_s": 2.0,
+  "probation_s": 0.3,
+  "sigma_a": 0.5,
+  "conf_new": 1.01,
+  "v_damp": 0.98
+ }
+}

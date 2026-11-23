@@ -50,6 +50,7 @@ No lens distortion (pinhole). Other values: `eye` and `target` (world coordinate
 | `logs/` | Gate passage logs and elevator operation logs (same format as real data). Made with `twinsim export-logs <run>` | Example for calibrating with real data (`calibrate`) |
 | `summary.json`, `scenario_resolved.json` and `.yaml` | Summary (people, motion statistics `motion`, people who arrived but were still waiting outside at the end `outside_at_end`, and so on), and the scenario with defaults filled in (including the random seed) | Regeneration, logging |
 | `validity.*` and `preview.png` | Comparison with the literature, figures for checking | Validity of the people distribution |
+| `calib/`, `bev_dets/`, `bev_tracks/`, `bev_eval/` | Projection matrices, detections, tracks and evaluation of multi-camera tracking on the floor plane (written by `twinsim bev-*`, [12](#bev)) | Comparing multi-camera trackers |
 
 ## 2. `ground_truth.json`
 
@@ -60,6 +61,7 @@ No lens distortion (pinhole). Other values: `eye` and `target` (world coordinate
 | `tracks[name]` | `[[x, y, yaw], …]`. The k-th entry is frame `people[name].start_frame + k` (from appearance until disappearance) |
 | `moving[name]` | `[0/1, …]`. Whether the person is walking in that frame (same length as `tracks`). 1 when the speed smoothed over 0.3 s exceeds 0.2 m/s, 0 when it falls below 0.1 m/s or after 2 frames with almost no movement (since 2026-11-08; before, whether the single frame's step exceeded 0.2 m/s). While walking, `yaw` turns toward the direction of the smoothed velocity |
 | `cameras[name]` | Cameras (representation in section 0) |
+| `camera_groups[group]` | `camera_groups` of the scenario (groups of cameras with overlapping views, `cameras`, and evaluation area `area`); `{}` when not given |
 | `gate_events` | `[{t, gate, lane, person, dir: in/out}]`. Times at which people passed through a gate |
 | `elevator_events` | `[{t, car, boarded: [name], alighted: [name]}]`. Times at which an elevator arrived, and the people who got on and got off |
 | `elevator_times`, `cars`, `spots`, `door` | Elevator arrival times, door position and capacity of each car, the spots where people stand while waiting for the elevator |
@@ -234,3 +236,22 @@ it computes the shortest walkable distances. The "ward execution delays" of the 
 | `ev_log.csv` | `time_s, car, boarded, alighted` |
 
 Times are aligned so that the earlier of the two logs starts at 0. `twinsim export-logs <run>` writes examples of these files.
+
+<a id="bev"></a>
+
+## 12. Floor-plane tracking (written by `twinsim bev-*`)
+
+Multi-camera tracking on the floor plane (the top view), built and compared per group of cameras with overlapping views (`camera_groups` in the scenario). See [bev-tracking.en.md](bev-tracking.en.md) for the procedure.
+Frames are 0-based video frames (counted from `frames[0]` of `render_log.json` when rendered; simulator frames otherwise). Coordinates are world metres.
+
+| File | Format | Contents |
+|---|---|---|
+| `calib/<camera>.json` | JSON | `P` (3×4, world metres → pixels), `K`, `width`, `height`, `fps`, `eye` (`twinsim.bev.write_calib`) |
+| `bev_dets/<detector>/<camera>.txt` | CSV | `frame, x1, y1, x2, y2, conf` (with a header line; boxes in pixels) |
+| `bev_dets/<detector>/run.json` | JSON | Detector, options, `frame_offset` (simulator frame of video frame 0), elapsed time, `version` (twinsim version and git hash) |
+| `bev_tracks/<tracker>/<group>/bev.csv` | CSV | `frame, t, id, x, y, cov_xx, cov_xy, cov_yy, n_views, kind, delay`. `t` is simulator seconds, `cov_*` the position uncertainty (m²), `n_views` the number of cameras that saw the person in that frame, `kind` is `online` (available at that frame) or `corrected` (revised later), `delay` how many frames later it was available |
+| `bev_tracks/<tracker>/<group>/mot/<camera>.txt` | MOTChallenge | Per-camera boxes made from the floor positions (a cylinder 1.7 m tall with radius 0.3 m, projected and clipped to the image). `frame` is the simulator frame + 1, as in the ground-truth `mot/`; `conf` is 1, the last two are −1 |
+| `bev_tracks/<tracker>/<group>/aicity.txt`, `aicity_cameras.json` | AI City MTMC | Same format as the ground-truth `aicity/gt.txt` (`camera_id obj_id frame_id xmin ymin width height xworld yworld`). Camera numbers follow the order in the group |
+| `bev_tracks/<tracker>/<group>/run.json` | JSON | Tracker, group, settings (`preset` and `params`), detections used, time per frame (ms), `version` |
+| `bev_eval/<name>_<group>.json` | JSON | `metrics["1m"]`, `metrics["0.5m"]`: `IDF1`, `HOTA`, `DetA`, `AssA`, `MOTA`, `MODA`, `IDSW`, `Prec`, `Rec`, `BEV_err_m` (position error of matched pairs), `TP`, `FN`, `FP`, `n_gt`, `n_gt_ids`, `n_pred_ids`; also `rules` (who is not judged), `frames`, `version` |
+| `bev_eval/summary.csv` | CSV | One row per `bev_eval/*.json` (`label, tracker, group, kind, threshold, IDF1, …`) |
