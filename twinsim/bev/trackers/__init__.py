@@ -6,10 +6,9 @@ from pathlib import Path
 
 import numpy as np
 
-from ...space import load_space
 from ..calib import calib as make_calib
 from ..groups import groups as load_groups
-from ..io import load_dets, open_run, version, write_bev
+from ..io import load_dets, open_run, run_space, version, write_bev
 from .a import PERSON_H, PERSON_R, cylinder_box
 from .base import TRACKERS, Tracker, TrackPoint, get, register
 
@@ -40,9 +39,10 @@ def track(run_dir, tracker="a", group_names=None, dets="gt_boxes", preset=None, 
         raise ValueError(f"追跡器 {tracker} はまとめて動かす（段階 3）")
     p = dict(load_preset(preset or "default", tracker) if (preset or tracker == "a") else {}, **(params or {}))
     det_dir = run / "bev_dets" / dets
-    floor_z = load_space(gt["space"]).z
+    space = run_space(run, gt)
+    floor_z = space.z
     out = {}
-    for gname, group in load_groups(gt, group_names).items():
+    for gname, group in load_groups(gt, group_names, space).items():
         cal = make_calib(gt, group.cameras)
         D = load_dets(det_dir, group.cameras)
         trk = cls(cal, group, gt["fps"], p, floor_z=floor_z)

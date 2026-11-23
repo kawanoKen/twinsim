@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from .groups import groups as load_groups
-from .io import load_dets, open_run, version, write_dets
+from .io import load_dets, open_run, run_space, version, write_dets
 
 DETECTORS = ("gt_boxes", "external")
 
@@ -54,7 +54,7 @@ def detect(run_dir, detector="gt_boxes", group_names=None, cameras=None, name=No
         raise ValueError(f"検出器 {detector} はない（あるのは {', '.join(DETECTORS)}）")
     run, gt, f0, n_frames = open_run(run_dir)
     if cameras is None:
-        cameras = sorted({c for g in load_groups(gt, group_names).values() for c in g.cameras})
+        cameras = sorted({c for g in load_groups(gt, group_names, run_space(run, gt)).values() for c in g.cameras})
     out = run / "bev_dets" / (name or detector)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()

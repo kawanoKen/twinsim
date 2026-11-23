@@ -54,9 +54,9 @@ class Group:
         return {"cameras": self.cameras, "area": self.area if self.area is not None else "seen_floor", "note": self.note}
 
 
-def seen_floor_mask(gt, cameras):
+def seen_floor_mask(gt, cameras, space=None):
     """群のカメラのどれかから床が見える歩ける格子。"""
-    sp = load_space(gt["space"])
+    sp = space or load_space(gt["space"])
     cams = [Camera(gt["cameras"][c], sp.z) for c in cameras]
     mask = np.zeros_like(sp.grid, bool)
     for i, j in zip(*np.nonzero(sp.grid)):
@@ -65,8 +65,8 @@ def seen_floor_mask(gt, cameras):
     return mask, sp.x0, sp.y0, sp.res
 
 
-def groups(gt, names=None):
-    """{群の名前: Group}（names で絞る）。"""
+def groups(gt, names=None, space=None):
+    """{群の名前: Group}（names で絞る）。space は結果の空間（io.run_space。area を書かない群の評価領域に使う）。"""
     spec = gt.get("camera_groups") or {"all": {"cameras": list(gt["cameras"])}}
     if names:
         missing = [n for n in names if n not in spec]
@@ -75,6 +75,6 @@ def groups(gt, names=None):
         spec = {n: spec[n] for n in names}
     out = {}
     for n, g in spec.items():
-        mask = None if g.get("area") is not None else seen_floor_mask(gt, g["cameras"])
+        mask = None if g.get("area") is not None else seen_floor_mask(gt, g["cameras"], space)
         out[n] = Group(n, g["cameras"], g.get("area"), mask, g.get("note"))
     return out

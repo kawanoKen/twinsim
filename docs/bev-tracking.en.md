@@ -50,7 +50,7 @@ Settings are in `twinsim/bev/presets/<name>.json` (`--preset`). Durations are wr
 ## Evaluation rules
 
 - A prediction within 1 m (and 0.5 m) on the floor is the same person. IDF1, HOTA, MOTA, MODA, ID switches, precision and recall are reported per group (CLEAR MOT and IDF1 counted as in motmetrics, HOTA as in TrackEval).
-- Ground truth and predictions outside the evaluation area are not counted.
+- Ground truth and predictions outside the evaluation area are not counted. People inside rooms (state `in_room`; not visible) are not in the ground truth.
 - People not judged (counted neither as misses nor as false positives; unmatched predictions near them are dropped):
   - people whose visible fraction (approximate, from `mot/`) is below 0.4 in every camera of the group (`--vis-min`; the same threshold as the MOPF comparison)
   - people who appear or disappear inside the evaluation area, for 1 s around that moment (`--portal-s`; elevator doors, entrances)

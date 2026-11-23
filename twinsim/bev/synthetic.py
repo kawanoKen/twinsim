@@ -6,7 +6,7 @@ import json
 import numpy as np
 
 from .groups import groups as load_groups
-from .io import gt_positions, open_run, version, write_bev
+from .io import gt_positions, open_run, run_space, version, write_bev
 from .trackers.base import TrackPoint
 
 
@@ -19,7 +19,7 @@ def synthetic_tracks(run_dir, group_names=None, label="synthetic", jitter_m=0.0,
     num = {n: i for i, n in enumerate(sorted(gt["people"]), start=1)}
     every = int(round(switch_every_s * gt["fps"]))
     out = {}
-    for gname, group in load_groups(gt, group_names).items():
+    for gname, group in load_groups(gt, group_names, run_space(run, gt)).items():
         pts = []
         for f in range(n_frames):
             items = pos.get(f, {})

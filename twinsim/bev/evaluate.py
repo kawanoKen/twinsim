@@ -20,7 +20,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 from .groups import groups as load_groups
-from .io import gt_positions, load_bev, open_run, version
+from .io import gt_positions, load_bev, open_run, run_space, version
 
 THRESHOLDS = (1.0, 0.5)
 VIS_MIN = 0.4      # MOPF の比べ方（mopf/io.py の VIS_MIN）と同じ
@@ -238,7 +238,7 @@ def evaluate(run_dir, tracker="a", group_names=None, thresholds=THRESHOLDS, vis_
     out_dir = run / "bev_eval"
     out_dir.mkdir(parents=True, exist_ok=True)
     results = {}
-    for gname, group in load_groups(gt, group_names).items():
+    for gname, group in load_groups(gt, group_names, run_space(run, gt)).items():
         tp = run / "bev_tracks" / tracker / gname / "bev.csv"
         if not tp.exists():
             raise FileNotFoundError(f"追跡がない: {tp}（先に twinsim bev-track）")

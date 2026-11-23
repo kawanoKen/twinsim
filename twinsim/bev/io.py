@@ -27,6 +27,14 @@ def open_run(run_dir):
     return run, gt, int(a), int(b) - int(a) + 1
 
 
+def run_space(run, gt):
+    """結果の空間。設定に書いた空間（dict・ファイルの場所）も読めるよう、scenario_resolved.json の space を先に見る（labels.py と同じ）。"""
+    from ..space import load_space
+    resolved = Path(run) / "scenario_resolved.json"
+    src = json.loads(resolved.read_text(encoding="utf-8")).get("space", gt["space"]) if resolved.exists() else gt["space"]
+    return load_space(src)
+
+
 def version():
     """twinsim の版と git のハッシュ（git の外なら None）。結果に必ず残す。"""
     try:
@@ -40,13 +48,14 @@ def version():
 
 
 def gt_positions(gt, f0, n_frames):
-    """{動画のコマ: {人: (x, y)}}（正解の全員。評価領域で絞るのは呼ぶ側）。"""
+    """{動画のコマ: {人: (x, y)}}（正解の全員。評価領域で絞るのは呼ぶ側）。部屋の中（状態 in_room、1.2。映らない）のコマは除く。"""
     out = defaultdict(dict)
     for name, p in gt["people"].items():
         s = p["start_frame"]
+        hidden = {g for a, b, st in p.get("states", []) if st == "in_room" for g in range(a, b + 1)}
         for k, (x, y, _) in enumerate(gt["tracks"][name]):
             f = s + k - f0
-            if 0 <= f < n_frames:
+            if 0 <= f < n_frames and s + k not in hidden:
                 out[f][name] = (x, y)
     return out
 
