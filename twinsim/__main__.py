@@ -17,9 +17,9 @@
                                                    空間は名前・フォルダ・YAML か JSON のファイル。真上の図のない空間は、歩ける所の格子から平面図を描く
   python -m twinsim bev-detect <結果の場所> [--detector gt_boxes|peoplenet|external] [--gpu 番号] [--group 群] [--name 名前] [--source 場所] [--miss 0.1 ...]
                                                 各カメラの人の枠（bev_dets/<名前>/）。gt_boxes は正解の枠から（GPU なし）
-  python -m twinsim bev-track <結果の場所> [--tracker a] [--group 群] [--dets 検出] [--preset 名前] [--param key=value ...] [--label 名前]
+  python -m twinsim bev-track <結果の場所> [--tracker a|mv3dt] [--group 群] [--dets 検出] [--preset 名前] [--param key=value ...] [--label 名前]
                                                 群ごとの床の上の追跡（bev_tracks/<名前>/<群>/）
-  python -m twinsim bev-eval <結果の場所> [--tracker a] [--group 群] [--frames 始まり 終わり] [--vis-min 0.4] [--portal-s 1.0]
+  python -m twinsim bev-eval <結果の場所> [--tracker 名前] [--group 群] [--frames 始まり 終わり] [--vis-min 0.4] [--portal-s 1.0]
                                                 床の上の追跡を正解と比べる（bev_eval/）
 --set の例: --set duration_s=60 --set seed=3 --set streams.0.rate.per_min=20
 """
@@ -135,6 +135,11 @@ def cli(argv):
     bt.add_argument("--preset", help="twinsim/bev/presets/<名前>.json（A の既定は default）")
     bt.add_argument("--param", action="append", help="設定を上書き（key=value）")
     bt.add_argument("--label", help="bev_tracks/ の下の名前（既定は追跡器の名前）")
+    bt.add_argument("--repeats", type=int, default=1, help="何回動かすか（2 以上なら <名前>_r1, _r2, …。実行ごとにぶれる MV3DT 向け）")
+    bt.add_argument("--gpu", type=int, help="mv3dt: 使う GPU の番号（nvidia-smi で空きを見てから）")
+    bt.add_argument("--models", help="mv3dt: モデルの置き場所（既定は TWINSIM_DEEPSTREAM_MODELS）")
+    bt.add_argument("--image", help="mv3dt: DeepStream のコンテナ（既定は TWINSIM_DEEPSTREAM_IMAGE）")
+    bt.add_argument("--keep-raw", action="store_true", help="mv3dt: DeepStream の KITTI の出力を消さずに残す")
     be = sub.add_parser("bev-eval")
     be.add_argument("run_dir")
     be.add_argument("--tracker", default="a", help="bev_tracks/ の下の名前")
@@ -216,7 +221,8 @@ def cli(argv):
     elif a.cmd == "bev-track":
         from .bev import track
         params = {k: yaml.safe_load(v) for k, v in (it.split("=", 1) for it in a.param or [])}
-        for g, info in track(a.run_dir, a.tracker, a.group, a.dets, a.preset, params, a.label).items():
+        offline = {k: v for k, v in (("gpu", a.gpu), ("models", a.models), ("image", a.image), ("keep_raw", a.keep_raw or None)) if v is not None}
+        for g, info in track(a.run_dir, a.tracker, a.group, a.dets, a.preset, params, a.label, a.repeats, **offline).items():
             print(json.dumps({"group": g, **{k: info[k] for k in ("tracker", "preset", "points", "ids", "ms_per_frame")}}, ensure_ascii=False))
     elif a.cmd == "bev-eval":
         from .bev import evaluate
@@ -225,8 +231,10 @@ def cli(argv):
                        kind=a.kind, label=a.label)
         for g, r in res.items():
             for thr, m in r["metrics"].items():
-                print(f"{r['label']:12s} {g:10s} {thr:5s} " + " ".join(f"{k} {m[k]:.3f}" if isinstance(m[k], float) else f"{k} {m[k]}"
-                                                                    for k in ("IDF1", "HOTA", "MOTA", "MODA", "IDSW", "Prec", "Rec")))
+                sd = r.get("std", {}).get(thr)
+                print(f"{r['label']:12s} {g:10s} {thr:5s} " + " ".join(
+                    (f"{k} {m[k]:.3f}" + (f"±{sd[k]:.3f}" if sd else "")) if isinstance(m[k], float) else f"{k} {m[k]}"
+                    for k in ("IDF1", "HOTA", "MOTA", "MODA", "IDSW", "Prec", "Rec")) + (f"  ({len(r['repeats'])} 回の平均±標準偏差)" if sd else ""))
         print("out:", Path(a.run_dir).expanduser() / "bev_eval")
     elif a.cmd == "run":
         over = parse_set(a.set)

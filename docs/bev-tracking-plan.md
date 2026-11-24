@@ -21,6 +21,7 @@
 | 2026-11-16 | 1 済み | シナリオの `camera_groups`・`twinsim/bev/`（`calib`・`groups`・`io`・`detect`（`gt_boxes`・`external`）・`trackers/a`・`evaluate`・`synthetic`）・`bev-detect`・`bev-track`・`bev-eval`・`tests/test_bev.py`・文書（[bev-tracking.md](bev-tracking.md)、`formats`・`config-reference` の日英）。全部のテストと ruff が通る |
 | 2026-11-16 | 2 の一部 | 場面 2 の PeopleNet の検出を `external` で読み込み、A が外の実験の実装と全部のコマで同じ ID・位置の差 0.0005 m 以下になった（評価も motmetrics と同じ値）。残りは `detect peoplenet` |
 | 2026-11-24 | 2 済み | `detect peoplenet`（`twinsim/bev/deepstream.py`。群ごとに DeepStream の `deepstream-app` で検出だけを書き出す）。場面 2 で外の実験の検出と全部の枠が同じ値、A がゲート 0.761・EV 前 0.637（判定しない人の決まりありで 0.768・0.699）を再現（GPU 1 枚で 40 秒）。検出の枠は小数 6 桁で書く（2 桁に丸めると A の値がわずかに変わった） |
+| 2026-11-24 | 3 済み | `trackers/mv3dt`（設定の生成・この計算だけの MQTT の受け口・`deepstream-test5-app`・出力の変換）、`bev-track --repeats`、`bev-eval` の平均と標準偏差。場面 2 で 3 回の平均がゲート 0.640 ± 0.021、EV 前 0.390 ± 0.011（外の実験 0.639・0.395）。GPU 1 枚で 3 回 × 2 群が 10 分 |
 | 2026-11-24 | 本体 1.2.0 を取り込み | `upstream/main`（v1.2.0）の上に載せ直した。設定に書いた空間を `scenario_resolved.json` から読む、部屋の中の人（`in_room`）を正解から除く。全部のテスト（241）と ruff が通る |
 
 ## 1. これまでに分かっていること（外の実験の結果）

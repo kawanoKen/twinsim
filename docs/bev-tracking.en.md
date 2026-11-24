@@ -48,6 +48,7 @@ The settings are those of the earlier experiment: PeopleNet v2.6.3 (ResNet-34, F
 
 | Name | What it does | Needs |
 |---|---|---|
+| `mv3dt` | The official MV3DT (multi-view 3D tracking of NVIDIA DeepStream 9.2). Tracks in each camera and unifies IDs and floor positions across cameras over MQTT (distributed). Detection (PeopleNet) runs inside, so `bev_dets/` is not used. The floor position is the mean of the cameras' foot positions per frame and ID | GPU, the DeepStream container, mosquitto (1–2 min for 5 cameras and 3,000 frames) |
 | `a` | Centralised online tracker. Fits a person cylinder (1.7 m tall, radius 0.3 m) to each box to get a floor position, assigns detections to tracks with a Hungarian assignment per camera, and follows each person with a Kalman filter fused across cameras. New people are started only when seen by 2 or more cameras | numpy, scipy (CPU, a few ms per frame) |
 
 Settings are in `twinsim/bev/presets/<name>.json` (`--preset`). Durations are written in seconds and converted to frames with the video's fps.
@@ -57,6 +58,23 @@ Settings are in `twinsim/bev/presets/<name>.json` (`--preset`). Durations are wr
 | `default` | A lobby (7 cameras, many people standing and talking) |
 | `office_gate_ev-gate` | The gate group of `office_gate_ev` (population 1,200; 5 cameras; people walking through) |
 | `office_gate_ev-ev` | The elevator-hall group of the same scene (5 cameras; people waiting and boarding) |
+| `mv3dt` (MV3DT's default) | The official sample settings as they are (`presets/mv3dt_tracker.yml`); DeepStream's default detector settings |
+| `mv3dt_nms100` | MV3DT with the detector set as for A (NMS, top 100, IoU 0.5) |
+
+### MV3DT (`--tracker mv3dt`)
+
+```bash
+twinsim bev-track runs/test --tracker mv3dt --gpu 3 --repeats 3          # bev_tracks/mv3dt_r1, _r2, _r3
+twinsim bev-eval runs/test --tracker mv3dt --frames 2000 3000             # mean and standard deviation of the 3 runs
+twinsim bev-track runs/test --tracker mv3dt --gpu 3 --param tracker.MultiViewAssociator.minPeerTrackletMatchScore=0.3 --param pgie.topk=100
+```
+
+- For each group, the videos go through `deepstream-test5-app` (PeopleNet → MV3DT). Each run starts its own MQTT broker (mosquitto on a free port of 127.0.0.1) and stops it at the end.
+  mosquitto is `TWINSIM_MOSQUITTO` (the executable; default `mosquitto` on PATH); to use a running broker, set `TWINSIM_MQTT` (`host:port`).
+  The model folder also needs `BodyPose3DNet/bodypose3dnet_accuracy.onnx` besides PeopleNet.
+- Settings are `pgie` (detector overrides) and `tracker` (overrides of `presets/mv3dt_tracker.yml`: `"Section.key": value`, or a whole section `{"Section": {key: value}}`). `--param pgie.<key>=value` and `--param tracker.<Section>.<key>=value` also work.
+- MV3DT gives different results from run to run with the same settings (the share of IDs unified across cameras varies). Run it several times with `--repeats` and read the mean and standard deviation from `bev-eval`.
+- The per-camera boxes (`mot/<camera>.txt`) are MV3DT's own boxes (for A they are cylinders made from the floor positions).
 
 ## Evaluation rules
 
@@ -71,3 +89,4 @@ Settings are in `twinsim/bev/presets/<name>.json` (`--preset`). Durations are wr
 - `tests/test_bev.py`: the projection agrees with twinsim's camera within 1e−6 pixels; tracks made from the ground truth give IDF1 and MOTA of 1; 20 % misses give recall 0.8; the number of ID switches matches; on a small scene A reaches IDF1 ≥ 0.95 from the ground-truth boxes.
 - Agreement with the earlier experiment (2026-11-16, 11-24): on the rendering of `office_gate_ev` (population 1,200, 10 fps, 300 s, 5 cameras per group), `--detector peoplenet` gives exactly the boxes of the earlier experiment. With them, A gives the same IDs in every frame as the earlier implementation, with positions within 0.0005 m (output rounding).
   IDF1 over the last 100 s (1 m, nobody excluded) is 0.761 for the gate group and 0.637 for the elevator hall; with the rules above, 0.768 and 0.699.
+- MV3DT (2026-11-24): on the same scene, the mean and standard deviation of 3 runs are 0.640 ± 0.021 for the gate group and 0.390 ± 0.011 for the elevator hall (1 m, nobody excluded; the earlier experiment: 0.639, 0.395). With the rules, 0.643 ± 0.020 and 0.406 ± 0.011.

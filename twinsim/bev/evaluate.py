@@ -12,6 +12,7 @@
 
 import csv
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -231,8 +232,25 @@ def crop(pred_frames, group):
 
 def evaluate(run_dir, tracker="a", group_names=None, thresholds=THRESHOLDS, vis_min=VIS_MIN, portal_s=PORTAL_S, frames=None, kind="online", label=None):
     """bev_tracks/<追跡器>/<群>/bev.csv を正解と比べ、bev_eval/<label>_<群>.json と bev_eval/summary.csv に書く。
-    frames: 評価する動画のコマ（range。既定は全部）。label: 結果の名前（既定は追跡器の名前）。"""
+    frames: 評価する動画のコマ（range。既定は全部）。label: 結果の名前（既定は追跡器の名前）。
+    bev_tracks/<追跡器>/ がなく <追跡器>_r1, _r2, … がある（bev-track --repeats）なら、それぞれを評価し、平均と標準偏差を <label>_<群>.json に書く。"""
     run, gt, f0, n_frames = open_run(run_dir)
+    reps = sorted((p.name for p in (run / "bev_tracks").glob(f"{tracker}_r*") if re.fullmatch(rf"{re.escape(tracker)}_r\d+", p.name)),
+                  key=lambda n: int(n.rsplit("_r", 1)[1]))
+    if not (run / "bev_tracks" / tracker).exists() and reps:
+        each = [evaluate(run_dir, r, group_names, thresholds, vis_min, portal_s, frames, kind) for r in reps]
+        label = label or tracker
+        results = {}
+        for gname in each[0]:
+            res = {**each[0][gname], "tracker": tracker, "label": label, "repeats": reps, "metrics": {}, "std": {}}
+            for thr in each[0][gname]["metrics"]:
+                ms = [e[gname]["metrics"][thr] for e in each]
+                res["metrics"][thr] = {k: float(np.mean([m[k] for m in ms])) for k in ms[0]}
+                res["std"][thr] = {k: float(np.std([m[k] for m in ms], ddof=1)) if len(ms) > 1 else 0.0 for k in ms[0]}
+            (run / "bev_eval" / f"{label}_{gname}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1))
+            results[gname] = res
+        write_summary(run / "bev_eval")
+        return results
     label = label or tracker
     frames = list(frames if frames is not None else range(n_frames))
     out_dir = run / "bev_eval"
@@ -255,6 +273,9 @@ def evaluate(run_dir, tracker="a", group_names=None, thresholds=THRESHOLDS, vis_
     return results
 
 
+STD_KEYS = ("IDF1", "HOTA", "MOTA")  # summary.csv に標準偏差も書く指標（--repeats の結果）
+
+
 def write_summary(out_dir):
     rows = []
     for p in sorted(Path(out_dir).glob("*.json")):
@@ -262,9 +283,11 @@ def write_summary(out_dir):
         if "metrics" not in r:
             continue
         for thr, m in r["metrics"].items():
+            sd = r.get("std", {}).get(thr, {})
             rows.append({"label": r["label"], "tracker": r["tracker"], "group": r["group"], "kind": r["kind"], "threshold": thr,
-                         **{k: (round(m[k], 4) if isinstance(m.get(k), float) else m.get(k)) for k in KEYS}})
+                         **{k: (round(m[k], 4) if isinstance(m.get(k), float) else m.get(k)) for k in KEYS},
+                         "runs": len(r.get("repeats", [])) or 1, **{f"{k}_std": round(sd[k], 4) if k in sd else "" for k in STD_KEYS}})
     with open(Path(out_dir) / "summary.csv", "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=["label", "tracker", "group", "kind", "threshold", *KEYS])
+        w = csv.DictWriter(fh, fieldnames=["label", "tracker", "group", "kind", "threshold", *KEYS, "runs", *(f"{k}_std" for k in STD_KEYS)])
         w.writeheader()
         w.writerows(rows)

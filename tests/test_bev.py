@@ -141,3 +141,57 @@ def test_peoplenet_without_gpu(run_dir, tmp_path, monkeypatch):
     D = load_dets(out, cams)
     assert D[3] == [("G2", (10.5, 20.25, 30.125, 80.0), 0.75)] and len(D[7]) == 2
     assert not (out / "_deepstream" / "00" / "kitti").exists() and (out / "_deepstream" / "00" / "config_pgie.txt").exists()
+
+
+def test_mv3dt_without_gpu(run_dir, tmp_path, monkeypatch):
+    """mv3dt の流れ（設定を書く → docker → KITTI を読む → bev.csv）を、docker の代わりに MV3DT の KITTI を書く関数で確かめる。
+    --repeats の評価（平均と標準偏差）も。"""
+    import subprocess
+
+    from twinsim.bev.trackers import mv3dt
+
+    models = tmp_path / "models"
+    for f in mv3dt.NEED:
+        (models / f).parent.mkdir(parents=True, exist_ok=True)
+        (models / f).write_bytes(b"")
+    (run_dir / "video").mkdir(exist_ok=True)
+    cams = CONFIG["camera_groups"]["gate"]["cameras"]
+    for c in cams:
+        (run_dir / "video" / f"{c}.mp4").write_bytes(b"")
+    monkeypatch.setenv("TWINSIM_MQTT", "127.0.0.1:1")  # 受け口は立てない
+    _, gt, _, _ = open_run(run_dir)
+    people = gt_positions(gt, *open_run(run_dir)[2:])
+    real_run, seen = subprocess.run, []
+
+    def fake_run(cmd, **kw):
+        if cmd[0] != "docker":
+            return real_run(cmd, **kw)
+        work = Path(cmd[cmd.index("-w") - 1].split(":")[0])
+        seen.append(cmd)
+        assert cmd[-3] == "deepstream-test5-app" and "--network" in cmd
+        trk = (work / "config_tracker.yml").read_text()
+        assert "/workspace/work/camInfo/CamGate.yml" in trk and "maxPeerToPredDistance4Fusion: 4.0" in trk
+        assert "127.0.0.1:1;/" in (work / "pub_sub_info_config.yml").read_text()
+        assert "kitti-track-output-dir=tracker-kitti" in (work / "config_deepstream.txt").read_text()
+        # 正解の位置をそのまま、2 台（源 0・1）から同じ ID で出す
+        names = sorted({n for f in people for n in people[f]})
+        for f in range(0, 50):
+            for src in (0, 1):
+                lines = [f"Person {names.index(n) + 1} 0 0 0 1 2 3 4 0 0 0 {x:.3f} {y:.3f} 0 0 0.9" for n, (x, y) in people.get(f, {}).items()]
+                (work / "tracker-kitti" / f"00_{src:03d}_{f:06d}.txt").write_text("\n".join(lines))
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ValueError, match="--gpu"):
+        track(run_dir, "mv3dt", models=str(models))
+    with pytest.raises(ValueError, match="知らない設定"):
+        track(run_dir, "mv3dt", params={"nope": 1}, gpu=0, models=str(models))
+    info = track(run_dir, "mv3dt", params={"tracker.MultiViewAssociator.maxPeerToPredDistance4Fusion": 4.0}, label="mvt",
+                 repeats=2, gpu=0, models=str(models))
+    assert len(seen) == 2 and set(info) == {"gate/mvt_r1", "gate/mvt_r2"} and info["gate/mvt_r1"]["dets"] == "internal"
+    pts = (run_dir / "bev_tracks/mvt_r1/gate/bev.csv").read_text().splitlines()
+    assert len(pts) > 1 and pts[1].split(",")[8] == "2"  # 2 台で見えた
+    assert (run_dir / "bev_tracks/mvt_r1/gate/mot/G1.txt").read_text()
+    res = evaluate(run_dir, "mvt", frames=range(0, 50), vis_min=None, portal_s=0)["gate"]
+    assert res["repeats"] == ["mvt_r1", "mvt_r2"] and res["metrics"]["1m"]["IDF1"] == 1 and res["std"]["1m"]["IDF1"] == 0
+    assert "IDF1_std" in (run_dir / "bev_eval/summary.csv").read_text().splitlines()[0]

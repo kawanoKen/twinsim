@@ -30,36 +30,68 @@ def load_preset(name, tracker):
     return d["params"]
 
 
-def track(run_dir, tracker="a", group_names=None, dets="gt_boxes", preset=None, params=None, label=None):
-    """bev_dets/<dets>/ の検出から、群ごとに bev_tracks/<label>/<群>/ を作る（label の既定は追跡器の名前）。
-    設定は 追跡器の既定 → presets/<preset>.json（既定 default、A だけ）→ params の順に重ねる。"""
+def track(run_dir, tracker="a", group_names=None, dets="gt_boxes", preset=None, params=None, label=None, repeats=1, **offline_opts):
+    """群ごとに bev_tracks/<label>/<群>/ を作る（label の既定は追跡器の名前）。設定は 追跡器の既定 → presets/<preset>.json
+    （既定は追跡器ごと: A は default、MV3DT は mv3dt）→ params の順に重ねる。
+    A は bev_dets/<dets>/ の検出から。MV3DT（offline）は動画から中で検出して動かす（offline_opts: gpu・image・models・keep_raw）。
+    repeats が 2 以上なら <label>_r1, <label>_r2, … に分けて書く（実行ごとにぶれる追跡器を比べるため）。"""
     run, gt, f0, n_frames = open_run(run_dir)
     cls = get(tracker)
-    if cls.offline:
-        raise ValueError(f"追跡器 {tracker} はまとめて動かす（段階 3）")
-    p = dict(load_preset(preset or "default", tracker) if (preset or tracker == "a") else {}, **(params or {}))
-    det_dir = run / "bev_dets" / dets
+    preset = preset or cls.default_preset
+    p = dict(load_preset(preset, tracker) if preset else {}, **(params or {}))
+    if offline_opts and not cls.offline:
+        raise ValueError(f"追跡器 {tracker} には {', '.join(offline_opts)} を使わない")
     space = run_space(run, gt)
     floor_z = space.z
+    label = label or tracker
+    labels = [label] if repeats <= 1 else [f"{label}_r{k}" for k in range(1, repeats + 1)]
     out = {}
     for gname, group in load_groups(gt, group_names, space).items():
         cal = make_calib(gt, group.cameras)
-        D = load_dets(det_dir, group.cameras)
-        trk = cls(cal, group, gt["fps"], p, floor_z=floor_z)
-        pts, t0 = [], time.perf_counter()
-        for f in range(n_frames):
-            pts += trk.step(f, D.get(f, []))
-        pts += trk.finish()
-        dt = time.perf_counter() - t0
-        folder = run / "bev_tracks" / (label or tracker) / gname
-        write_bev(folder / "bev.csv", pts, gt["fps"], f0)
-        write_views(folder, pts, cal, gt, f0, floor_z)
-        info = {"tracker": tracker, "group": gname, "group_def": group.to_json(), "dets": dets, "preset": preset or ("default" if tracker == "a" else None),
-                "params": p, "frame_offset": f0, "frames": n_frames, "points": len(pts), "ids": len({q.id for q in pts}),
-                "ms_per_frame": round(1000 * dt / max(n_frames, 1), 3), "version": version()}
-        (folder / "run.json").write_text(json.dumps(info, ensure_ascii=False, indent=1))
-        out[gname] = info
+        D = None if cls.offline else load_dets(run / "bev_dets" / dets, group.cameras)
+        for lab in labels:
+            folder = run / "bev_tracks" / lab / gname
+            trk = cls(cal, group, gt["fps"], p, floor_z=floor_z)
+            t0 = time.perf_counter()
+            extra = {}
+            if cls.offline:
+                pts, obs, extra = trk.run_offline(run, gt, n_frames, folder / f"_{tracker}", **offline_opts)
+            else:
+                pts = []
+                for f in range(n_frames):
+                    pts += trk.step(f, D.get(f, []))
+                pts += trk.finish()
+            dt = time.perf_counter() - t0
+            write_bev(folder / "bev.csv", pts, gt["fps"], f0)
+            if cls.offline:
+                write_native_views(folder, obs, cal, f0, n_frames)
+            else:
+                write_views(folder, pts, cal, gt, f0, floor_z)
+            info = {"tracker": tracker, "group": gname, "group_def": group.to_json(),
+                    "dets": "internal" if cls.offline else dets, "preset": preset,
+                    "params": p, "frame_offset": f0, "frames": n_frames, "points": len(pts), "ids": len({q.id for q in pts}),
+                    "ms_per_frame": round(1000 * dt / max(n_frames, 1), 3), "version": version(), **({"run": extra} if extra else {})}
+            (folder / "run.json").write_text(json.dumps(info, ensure_ascii=False, indent=1))
+            out[gname if repeats <= 1 else f"{gname}/{lab}"] = info
     return out
+
+
+def write_native_views(folder, obs, cal, f0, n_frames):
+    """追跡器が出したカメラごとの枠（MV3DT）: mot/<カメラ>.txt と aicity.txt（write_views と同じ形）。"""
+    (folder / "mot").mkdir(parents=True, exist_ok=True)
+    rows, lines = {c: [] for c in cal}, []
+    idx = {c: i for i, c in enumerate(cal, start=1)}
+    for f in sorted(obs):
+        if f >= n_frames:
+            continue
+        for cam, i, (x0, y0, x1, y1), (x, y), conf in obs[f]:
+            rows[cam].append(f"{f + f0 + 1},{i},{x0:.1f},{y0:.1f},{x1 - x0:.1f},{y1 - y0:.1f},{conf:.4f},-1,-1\n")
+            if np.isfinite([x, y]).all():
+                lines.append(f"{idx[cam]} {i} {f + f0 + 1} {x0:.1f} {y0:.1f} {x1 - x0:.1f} {y1 - y0:.1f} {x:.3f} {y:.3f}\n")
+    for cam, r in rows.items():
+        (folder / "mot" / f"{cam}.txt").write_text("".join(r))
+    (folder / "aicity.txt").write_text("".join(lines))
+    (folder / "aicity_cameras.json").write_text(json.dumps(idx))
 
 
 def write_views(folder, pts, cal, gt, f0, floor_z, kind="online"):

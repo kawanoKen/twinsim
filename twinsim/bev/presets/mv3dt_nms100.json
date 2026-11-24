@@ -1,0 +1,6 @@
+{
+ "tracker": "mv3dt",
+ "note": "検出を A と同じ設定（NMS 上位 100 件・IoU 0.5）にそろえたもの。追跡器は公式の見本のまま",
+ "note_en": "The detector set as for A (NMS, top 100, IoU 0.5); the tracker as in the official sample",
+ "params": {"pgie": {"cluster-mode": 2, "topk": 100, "nms-iou-threshold": 0.5}, "tracker": {}}
+}

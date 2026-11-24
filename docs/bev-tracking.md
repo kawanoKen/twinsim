@@ -49,6 +49,7 @@ Python からは `twinsim.bev` の `detect`・`track`・`evaluate`・`synthetic_
 | 名前 | 中身 | 必要なもの |
 |---|---|---|
 | `a` | 集中型のオンライン追跡。枠を人の円柱（背 1.7 m・半径 0.3 m）に合わせて床の位置を出し、カメラごとのハンガリアン法で軌跡に割り当て、カメラ間で融合したカルマンフィルタで追う。2 台以上で見えたときだけ新しい人にする | numpy・scipy（CPU、1 コマ数 ms） |
+| `mv3dt` | 公式 MV3DT（NVIDIA DeepStream 9.2 の多視点 3D 追跡）。カメラごとに追跡し、MQTT で ID と床の位置をカメラ間でそろえる分散型。検出（PeopleNet）は中で行い、`bev_dets/` を使わない。床の位置は、コマと ID ごとにカメラの足の位置を平均する | GPU、DeepStream のコンテナ、mosquitto（5 台・3000 コマで 1〜2 分） |
 
 設定は `twinsim/bev/presets/<名前>.json`（`--preset`）。時間の設定は秒で書き、動画の fps でコマに直します。
 
@@ -57,6 +58,23 @@ Python からは `twinsim.bev` の `detect`・`track`・`evaluate`・`synthetic_
 | `default` | ロビー（7 台、止まって話す人が多い） |
 | `office_gate_ev-gate` | `office_gate_ev`（在館 1,200 人）のゲートの群（5 台、歩いて通り過ぎる） |
 | `office_gate_ev-ev` | 同じ場面の EV 前の群（5 台、待って乗る） |
+| `mv3dt`（MV3DT の既定） | 公式の見本の設定そのまま（`presets/mv3dt_tracker.yml`）。検出は DeepStream の既定 |
+| `mv3dt_nms100` | MV3DT の検出を A と同じ設定（NMS 上位 100 件・IoU 0.5）にそろえたもの |
+
+### MV3DT（`--tracker mv3dt`）
+
+```bash
+twinsim bev-track runs/test --tracker mv3dt --gpu 3 --repeats 3          # bev_tracks/mv3dt_r1, _r2, _r3
+twinsim bev-eval runs/test --tracker mv3dt --frames 2000 3000             # 3 回の平均と標準偏差
+twinsim bev-track runs/test --tracker mv3dt --gpu 3 --param tracker.MultiViewAssociator.minPeerTrackletMatchScore=0.3 --param pgie.topk=100
+```
+
+- 群ごとに、動画を `deepstream-test5-app`（PeopleNet → MV3DT）に通します。実行のたびに、その計算だけの MQTT の受け口（mosquitto、127.0.0.1 の空いた番号）を立てて、終わりに止めます。
+  mosquitto は `TWINSIM_MOSQUITTO`（実行ファイル。既定は PATH の `mosquitto`）、すでに動いている受け口を使うなら `TWINSIM_MQTT`（`host:port`）。
+  モデルの置き場所には PeopleNet のほかに `BodyPose3DNet/bodypose3dnet_accuracy.onnx` も要ります。
+- 設定は `pgie`（検出の上書き）と `tracker`（`presets/mv3dt_tracker.yml` の上書き。`"節.キー": 値`、または節を丸ごと `{"節": {キー: 値}}`）。`--param pgie.<キー>=値`・`--param tracker.<節>.<キー>=値` でも上書きできます。
+- MV3DT は同じ設定でも実行ごとに結果がぶれます（カメラ間で ID がそろう割合が変わる）。`--repeats` で何回か動かし、`bev-eval` で平均と標準偏差を見ます。
+- カメラごとの枠（`mot/<カメラ>.txt`）は MV3DT が出した枠そのままです（A は床の位置から作った円柱の枠）。
 
 ## 評価の決まり
 
@@ -71,3 +89,4 @@ Python からは `twinsim.bev` の `detect`・`track`・`evaluate`・`synthetic_
 - `tests/test_bev.py`: 投影が twinsim のカメラと 1e−6 画素以内で一致、正解から作った追跡で IDF1・MOTA が 1、見落とし 20% で再現率 0.8、ID の取り違えの数が合う、小さな場面で A が正解の枠から IDF1 0.95 以上。
 - 外の実験との一致（2026-11-16、11-24）: `office_gate_ev`（在館 1,200 人、10 fps、300 秒、群ごとに 5 台）の描画で、`--detector peoplenet` の検出が外の実験の検出と全部の枠で同じ値になりました。その検出で、A の結果が外の実験の実装と全部のコマで同じ ID・位置の差 0.0005 m 以下（出力の丸め）になりました。
   後ろの 100 秒の IDF1（1 m、判定しない人なし）はゲートの群 0.761、EV 前の群 0.637、上の決まりで判定しない人を除くと 0.768・0.699 です。
+- MV3DT（2026-11-24）: 同じ場面で 3 回の平均と標準偏差が、ゲートの群 0.640 ± 0.021、EV 前の群 0.390 ± 0.011（1 m、判定しない人なし。外の実験は 0.639・0.395）。決まりありで 0.643 ± 0.020・0.406 ± 0.011。

@@ -10,7 +10,8 @@
   finish() -> [TrackPoint]                  終わりに、遅れて訂正した結果（kind="corrected"）。なければ空
   detections: [(カメラ, (x1, y1, x2, y2), 確信度), ...]
 
-外の手法（MV3DT など）は step を使わず、run_offline(run, group, dets, out) でまとめて動かし、同じ TrackPoint の形に直す。
+外の手法（MV3DT など。offline = True）は step を使わず、run_offline(run, gt, n_frames, work, gpu=...) でまとめて動かし、
+(TrackPoint の並び, {コマ: [(カメラ, ID, 枠, 床の位置, 確信度)]}, 記録) を返す。検出は中で行う（bev_dets/ を使わない）。
 """
 
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ class TrackPoint:
 class Tracker:
     name = "base"
     offline = False
+    default_preset = None  # presets/<名前>.json（--preset を書かないとき）
 
     def __init__(self, calib, area, fps, params, floor_z=0.0):
         self.calib, self.area, self.fps, self.params, self.floor_z = calib, area, fps, dict(params or {}), float(floor_z)
@@ -51,7 +53,7 @@ def register(cls):
 
 
 def get(name):
-    from . import a  # noqa: F401  登録のため
+    from . import a, mv3dt  # noqa: F401  登録のため
     if name not in TRACKERS:
         raise ValueError(f"追跡器 {name} はない（あるのは {', '.join(sorted(TRACKERS))}）")
     return TRACKERS[name]

@@ -87,6 +87,7 @@ class _Track:
 @register
 class ATracker(Tracker):
     name = "a"
+    default_preset = "default"
 
     def __init__(self, calib, area, fps, params, floor_z=0.0):
         super().__init__(calib, area, fps, params, floor_z)
