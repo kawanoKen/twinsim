@@ -120,6 +120,16 @@ twinsim bev-overlay runs/test --tracker a_noisy --group gate --frames 2000 2300 
 左に上面図（白い丸 = 正解、色の点と番号 = 予測、赤い丸 = 見逃し、赤い × = 誤検出、黄色の輪 = ID の切り替わり、灰色 = 判定しない人）、
 右に群のカメラ（緑の枠 = 正解、灰色 = ほとんど隠れた正解、色の枠 = 追跡の枠）を並べます。描画した動画（`video/`）と ffmpeg が要ります。
 
+## with-mopf と比べる（`bev-mopf`）
+
+ブランチ with-mopf の MOPF の結果（`mopf_tracks/`・`mopf_eval/links.json`）を読み込み、同じカメラの画面の上で、with-mopf と同じ決まりで比べます。
+評価領域の外の人と、見えている割合 0.4 未満の人は判定しません。決まりと手順は [bev-design.md の 5.4](bev-design.md)。
+
+```bash
+twinsim bev-mopf import runs/test --group mopf2                                         # bev_tracks/mopf/mopf2/
+twinsim bev-mopf compare runs/test --tracker A=a/s7 --tracker mopf=mopf/mopf2 --area-group s7   # bev_eval/compare_CamGate_CamEV.json
+```
+
 ## 確かめ
 
 - `tests/test_bev.py`: 投影が twinsim のカメラと 1e−6 画素以内で一致、正解から作った追跡で IDF1・MOTA が 1、見落とし 20% で再現率 0.8、ID の取り違えの数が合う、小さな場面で A が正解の枠から IDF1 0.95 以上。

@@ -75,6 +75,7 @@
 | `twinsim bev-track <結果>` | 群ごとの追跡 → `bev_tracks/<名前>/<群>/`。`--repeats`（繰り返し）・`--perturb`（設定を少し揺らした 15 通り） | `--tracker mv3dt` だけ（`--gpu`） |
 | `twinsim bev-eval <結果> --tracker <名前>` | 正解と比べる → `bev_eval/` | 使わない |
 | `twinsim bev-overlay <結果> --tracker <名前>` | 確かめの動画 → `bev_overlay/` | 使わない |
+| `twinsim bev-mopf tracks・import・compare <結果>` | with-mopf との比べ（5.4） | 使わない |
 
 Python からは `twinsim.bev` の `detect`・`track`・`evaluate`・`overlay`・`synthetic_tracks`。
 
@@ -208,6 +209,32 @@ twinsim bev-overlay runs/test --tracker a_gate --group gate --frames 2000 2300  
 
 視野の重なる群の中は床の上の追跡でまとめ、群と群の間（視野が重ならない）は `linking.py` の考え方でつなぐ、が本来の形（段階 5）。
 `linking.py` はカメラの追跡（1 台の ID のひと続き）をつなぐので、群の追跡（`bev.csv` の ID のひと続き）を同じように渡せるようにする。
+
+### 5.4 比べ方（`twinsim bev-mopf`、`twinsim/bev/compare.py`）
+
+with-mopf のコードは使わず、その出力のファイル（`mopf_tracks/<カメラ>.jsonl`・`mopf_eval/links.json`）だけを読む。
+同じ描画の結果に、両方の追跡を置いて比べる。
+
+```
+with-mopf: mopf-process（MOPF）か bev-mopf tracks（代わり）→ mopf_tracks/ → mopf-link → mopf_eval/links.json
+このブランチ: bev-mopf import → bev_tracks/mopf/<群>/（MOPF の枠・床の点）
+             bev-track（A、群のカメラ）→ bev_tracks/a/<群>/
+             bev-mopf compare → bev_eval/compare_<カメラ>.json
+```
+
+| 決まり | 中身 |
+|---|---|
+| 採点する画面 | MOPF のカメラ（既定 CamGate・CamEV）。床の上の追跡は、そのカメラの枠がなければ床の位置から作る（背 1.7 m・半径 0.3 m の円柱） |
+| 判定する人 | 見えている割合 0.4 以上で、床の位置が評価領域（`--area-group` の `area`）の中の人。それ以外の人とだけ重なる枠も数えない |
+| 指標 | 2 台を合わせた IDF1（with-mopf の `mopf-link` と同じ。IoU 0.3、コマの番号をカメラごとにずらして 1 つの列にする）・MOTA・適合率・再現率、カメラの間の移り（ある人が一方で見えなくなり 90 秒以内にもう一方に現れた）を同じ番号でつないだ割合 |
+| MOPF の代わり | MOPF を動かせないときは `bev-mopf tracks` で、同じ検出から 1 台ずつの追跡（ByteTrack の考え方）を作る。MOPF より ID がよく切れるので、MOPF の数字の代わりにはならない |
+
+```bash
+twinsim bev-mopf tracks runs/test --cameras CamGate CamEV --dets peoplenet       # MOPF がないとき: mopf_tracks_peoplenet/
+cd <with-mopf のチェックアウト> && uv run python -c "from twinsim.mopf import link; link('runs/test', cameras=['CamGate', 'CamEV'], tracks_dir='runs/test/mopf_tracks_peoplenet', apps=('color',))"
+twinsim bev-mopf import runs/test --group mopf2 --tracks runs/test/mopf_tracks_peoplenet   # → bev_tracks/mopf/mopf2/
+twinsim bev-mopf compare runs/test --tracker A=a/s7 --tracker mopf=mopf/mopf2 --area-group s7
+```
 
 ## 6. 既知の制限
 

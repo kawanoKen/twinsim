@@ -264,6 +264,9 @@ Frames are 0-based video frames (counted from `frames[0]` of `render_log.json` w
 
 | `bev_eval/per_camera.csv` | CSV | One row per camera (`label, group, camera, IDF1, MOTA, MODA, IDSW, Prec, Rec, n_gt, count_mae`); `count_mae` is the mean absolute difference in counts per frame |
 | `bev_overlay/<tracker>_<group>.mp4` | H.264 | The check video of `bev-overlay` (top view and the group's cameras) |
+| `mopf_tracks_<detector>/<camera>.jsonl`, `info.json` | JSON Lines | Per-camera tracking from `bev-mopf tracks` (same form as MOPF's `tracking.jsonl`: `frame_id, tracking_id, position_x_min, position_y_min, position_x_max, position_y_max`; `frame_id` counts from `frame_offset` in `info.json`) |
+| `bev_tracks/mopf/<group>/` | | MOPF results loaded by `bev-mopf import`. `mot/<camera>.txt` holds MOPF boxes with with-mopf's global IDs; `bev.csv` holds the box feet projected onto the floor (`cov_*` empty) |
+| `bev_eval/compare_<cameras>.json` | JSON | `bev-mopf compare`: `cameras`, `area_group`, `people_seen`, `results[name]` (`IDF1`, `MOTA`, `IDSW`, `Prec`, `Rec`, `n_gt`, `handovers`, `handovers_found`, `handovers_kept`, `handover_rate`) |
 
 Besides the floor-plane `metrics`, `bev_eval/<name>_<group>.json` holds the following (all over the evaluated frames only).
 

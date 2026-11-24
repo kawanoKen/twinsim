@@ -267,41 +267,54 @@ def read_mot(path, f0, n_frames, gt_file=False):
     return out
 
 
+def outside_ids(run, gt, f0, n_frames, group, frames):
+    """{動画のコマ: 床の位置が評価領域の外の人の枠の番号}（mot/ids.json がなければ None）。"""
+    if group is None or gt is None or not (run / "mot/ids.json").exists():
+        return None
+    ids = json.loads((run / "mot/ids.json").read_text())
+    pos = gt_positions(gt, f0, n_frames)
+    outside = {}
+    for f in frames:
+        items = pos.get(f, {})
+        names = list(items)
+        ok = group.contains([items[n] for n in names]) if names else []
+        outside[f] = {ids[n] for n, k in zip(names, ok) if not k and n in ids}
+    return outside
+
+
+def camera_frames(G, T, fr, outside=None, iou_min=IOU_MIN, vis_min=VIS_MIN):
+    """1 台の正解の枠 G・予測の枠 T（read_mot の形）→ 判定する正解 {コマ: {人: 枠}}・予測 {コマ: [(ID, 枠)]}・人数の差。
+    見えている割合が vis_min 未満の正解と、outside（評価領域の外）の正解は判定しない。それとだけ重なる予測も数えない。"""
+    gf, pf, cnt = {}, {}, []
+    for f in fr:
+        g, t = G.get(f, []), T.get(f, [])
+        out_f = outside.get(f, set()) if outside is not None else set()
+        bad = [x[0] in out_f or (vis_min is not None and x[2] < vis_min) for x in g]
+        gv = [x for x, b in zip(g, bad) if not b]
+        gi = [x for x, b in zip(g, bad) if b]
+        if gi and t:
+            mi = 1 - iou_dist([x[1] for x in t], [x[1] for x in gi]).min(1)
+            mv = 1 - iou_dist([x[1] for x in t], [x[1] for x in gv]).min(1) if gv else np.zeros(len(t))
+            t = [x for x, a, b in zip(t, mi, mv) if not (a >= iou_min and b < iou_min)]
+        gf[f] = {i: b for i, b, _ in gv}
+        pf[f] = [(i, b) for i, b, _ in t]
+        cnt.append(abs(len(t) - len(gv)))
+    return gf, pf, cnt
+
+
 def per_camera(run, f0, n_frames, folder, cameras, frames, iou_min=IOU_MIN, vis_min=VIS_MIN, gt=None, group=None):
     """追跡のカメラごとの枠（folder/mot/<カメラ>.txt）を正解の mot/ と比べる（MOPF の mopf-eval と同じ決まり）。
     見えている割合が vis_min 未満の正解は判定しない（その枠とだけ重なる予測も数えない）。正解の枠のあるコマ（mot_stride）だけ。
     group を渡すと、床の位置が評価領域の外の人も判定しない（床の上の追跡器は評価領域の中だけを追うので）。"""
     stride = mot_stride(run)
-    outside = None
-    if group is not None and gt is not None and (run / "mot/ids.json").exists():
-        ids = json.loads((run / "mot/ids.json").read_text())
-        pos = gt_positions(gt, f0, n_frames)
-        outside = {}
-        for f in frames:
-            items = pos.get(f, {})
-            names = list(items)
-            ok = group.contains([items[n] for n in names]) if names else []
-            outside[f] = {ids[n] for n, k in zip(names, ok) if not k and n in ids}
+    outside = outside_ids(run, gt, f0, n_frames, group, frames)
     fr = [f for f in frames if (f + f0) % stride == 0]
     out = {}
     for cam in cameras:
-        G, T = read_mot(run / "mot" / f"{cam}.txt", f0, n_frames, True), read_mot(folder / "mot" / f"{cam}.txt", f0, n_frames)
         if not (run / "mot" / f"{cam}.txt").exists():
             continue
-        gf, pf, cnt = {}, {}, []
-        for f in fr:
-            g, t = G.get(f, []), T.get(f, [])
-            out_f = outside.get(f, set()) if outside is not None else set()
-            bad = [x[0] in out_f or (vis_min is not None and x[2] < vis_min) for x in g]
-            gv = [x for x, b in zip(g, bad) if not b]
-            gi = [x for x, b in zip(g, bad) if b]
-            if gi and t:
-                mi = 1 - iou_dist([x[1] for x in t], [x[1] for x in gi]).min(1)
-                mv = 1 - iou_dist([x[1] for x in t], [x[1] for x in gv]).min(1) if gv else np.zeros(len(t))
-                t = [x for x, a, b in zip(t, mi, mv) if not (a >= iou_min and b < iou_min)]
-            gf[f] = {i: b for i, b, _ in gv}
-            pf[f] = [(i, b) for i, b, _ in t]
-            cnt.append(abs(len(t) - len(gv)))
+        G, T = read_mot(run / "mot" / f"{cam}.txt", f0, n_frames, True), read_mot(folder / "mot" / f"{cam}.txt", f0, n_frames)
+        gf, pf, cnt = camera_frames(G, T, fr, outside, iou_min, vis_min)
         r = clear_idf1(gf, pf, fr, 1 - iou_min, dist=iou_dist)
         r["count_mae"] = float(np.mean(cnt)) if cnt else None
         out[cam] = {k: r[k] for k in CAM_KEYS}

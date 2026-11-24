@@ -75,6 +75,7 @@ and the optional dependency `bev` (`pyproject.toml`; OpenCV; `uv sync --extra be
 | `twinsim bev-track <run>` | Tracking per group → `bev_tracks/<name>/<group>/`. `--repeats` (repeat runs), `--perturb` (15 slightly perturbed settings) | Only `--tracker mv3dt` (`--gpu`) |
 | `twinsim bev-eval <run> --tracker <name>` | Compare with the ground truth → `bev_eval/` | no |
 | `twinsim bev-overlay <run> --tracker <name>` | Check video → `bev_overlay/` | no |
+| `twinsim bev-mopf tracks / import / compare <run>` | Comparison with with-mopf (5.4) | no |
 
 From Python: `detect`, `track`, `evaluate`, `overlay` and `synthetic_tracks` in `twinsim.bev`.
 
@@ -208,6 +209,32 @@ If the two are combined, these four can be shared. Tracking (`mopf/process.py`, 
 
 The intended form (stage 5) is: merge people within each group of overlapping cameras with floor-plane tracking, and link between groups (non-overlapping views) in the way `linking.py` does.
 `linking.py` links per-camera tracks (runs of one camera's ID), so group tracks (runs of an ID in `bev.csv`) should be passed to it in the same way.
+
+### 5.4 How to compare (`twinsim bev-mopf`, `twinsim/bev/compare.py`)
+
+It does not use the with-mopf code; it reads only its output files (`mopf_tracks/<camera>.jsonl`, `mopf_eval/links.json`).
+Both trackings are placed in the same rendered result and compared.
+
+```
+with-mopf: mopf-process (MOPF) or bev-mopf tracks (stand-in) → mopf_tracks/ → mopf-link → mopf_eval/links.json
+this branch: bev-mopf import → bev_tracks/mopf/<group>/ (MOPF boxes, floor points)
+             bev-track (A, the group's cameras) → bev_tracks/a/<group>/
+             bev-mopf compare → bev_eval/compare_<cameras>.json
+```
+
+| Rule | Meaning |
+|---|---|
+| Views scored | MOPF's cameras (default CamGate, CamEV). For floor-plane tracking without boxes for a camera, boxes are made from the floor positions (a cylinder 1.7 m tall, radius 0.3 m) |
+| People judged | Visible fraction 0.4 or more and floor position inside the evaluation area (`area` of `--area-group`). Boxes that overlap only other people are not counted |
+| Metrics | IDF1 over the two cameras (as in with-mopf `mopf-link`: IoU 0.3, frames of each camera offset into one sequence), MOTA, precision, recall, and the share of handovers between cameras (a person disappears from one and appears in the other within 90 s) kept under the same ID |
+| Stand-in for MOPF | When MOPF cannot be run, `bev-mopf tracks` builds per-camera tracking (ByteTrack-style) from the same detections. Its IDs break more often than MOPF's, so its numbers do not stand in for MOPF |
+
+```bash
+twinsim bev-mopf tracks runs/test --cameras CamGate CamEV --dets peoplenet       # without MOPF: mopf_tracks_peoplenet/
+cd <with-mopf checkout> && uv run python -c "from twinsim.mopf import link; link('runs/test', cameras=['CamGate', 'CamEV'], tracks_dir='runs/test/mopf_tracks_peoplenet', apps=('color',))"
+twinsim bev-mopf import runs/test --group mopf2 --tracks runs/test/mopf_tracks_peoplenet   # → bev_tracks/mopf/mopf2/
+twinsim bev-mopf compare runs/test --tracker A=a/s7 --tracker mopf=mopf/mopf2 --area-group s7
+```
 
 ## 6. Known limitations
 

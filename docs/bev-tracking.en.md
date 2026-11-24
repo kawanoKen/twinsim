@@ -120,6 +120,16 @@ twinsim bev-overlay runs/test --tracker a_noisy --group gate --frames 2000 2300 
 The top view on the left (white circles = ground truth, coloured dots and numbers = predictions, red circles = misses, red crosses = false positives, yellow rings = ID switches, grey = not judged)
 and the group's cameras on the right (green boxes = ground truth, grey = mostly hidden ground truth, coloured boxes = the tracker's boxes). Needs the rendered videos (`video/`) and ffmpeg.
 
+## Comparing with with-mopf (`bev-mopf`)
+
+Loads MOPF results from branch with-mopf (`mopf_tracks/`, `mopf_eval/links.json`) and compares on the same camera views with the same rules as with-mopf.
+People outside the evaluation area and people with a visible fraction below 0.4 are not judged. Rules and steps: [bev-design.en.md, 5.4](bev-design.en.md).
+
+```bash
+twinsim bev-mopf import runs/test --group mopf2                                         # bev_tracks/mopf/mopf2/
+twinsim bev-mopf compare runs/test --tracker A=a/s7 --tracker mopf=mopf/mopf2 --area-group s7   # bev_eval/compare_CamGate_CamEV.json
+```
+
 ## Checks
 
 - `tests/test_bev.py`: the projection agrees with twinsim's camera within 1e−6 pixels; tracks made from the ground truth give IDF1 and MOTA of 1; 20 % misses give recall 0.8; the number of ID switches matches; on a small scene A reaches IDF1 ≥ 0.95 from the ground-truth boxes.

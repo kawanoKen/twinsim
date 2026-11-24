@@ -9,6 +9,7 @@
   graph       ゾーンの人数・移動（graph/ と同じ形）→ bev_tracks/<追跡器>/<群>/graph/ と正解との比べ
   tasks       ゲートの通過・止まった区間・混み具合・EV の待ち時間（tasks.json と同じ形）→ bev_tracks/<追跡器>/<群>/tasks.json と正解との比べ
   overlay     上面図とカメラを並べた確かめの動画 → bev_overlay/
+  compare     ブランチ with-mopf（MOPF の連携）の結果を読み込み、同じカメラの画面の上で比べる
   synthetic   確かめ用の追跡（正解から作る）
   io          共通の読み書き
 """

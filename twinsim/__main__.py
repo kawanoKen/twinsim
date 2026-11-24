@@ -23,6 +23,11 @@
                                                 床の上の追跡を正解と比べる（bev_eval/・カメラごと・人数・集計）
   python -m twinsim bev-overlay <結果の場所> [--tracker 名前] [--group 群] [--frames 始まり 終わり]
                                                 上面図とカメラを並べ、正解・予測・誤りを重ねた動画（bev_overlay/）
+  python -m twinsim bev-mopf tracks <結果の場所> --cameras CamGate CamEV [--dets peoplenet]   MOPF の代わりの 1 台ずつの追跡（mopf_tracks_<検出>/）
+  python -m twinsim bev-mopf import <結果の場所> --group 群 [--label mopf] [--tracks 場所] [--links links.json]
+                                                with-mopf の mopf-link の結果を bev_tracks/<label>/<群>/ に入れる
+  python -m twinsim bev-mopf compare <結果の場所> --tracker 名前=<label>/<群> ... [--cameras CamGate CamEV] [--area-group 群] [--frames 始まり 終わり]
+                                                同じカメラの画面の上で、with-mopf と同じ決まりで比べる（2 台を合わせた IDF1・カメラの間の移り）
 --set の例: --set duration_s=60 --set seed=3 --set streams.0.rate.per_min=20
 """
 
@@ -152,6 +157,18 @@ def cli(argv):
     be.add_argument("--portal-s", type=float, default=1.0, help="評価領域の中で現れた・消えた人の前後この秒は判定しない（0 で使わない）")
     be.add_argument("--kind", default="online", choices=["online", "corrected"])
     be.add_argument("--label", help="bev_eval/ の結果の名前（既定は --tracker）")
+    bm = sub.add_parser("bev-mopf", help="with-mopf（MOPF の連携）と比べる: tracks・import・compare")
+    bm.add_argument("action", choices=["tracks", "import", "compare"])
+    bm.add_argument("run_dir")
+    bm.add_argument("--cameras", nargs="+", default=["CamGate", "CamEV"])
+    bm.add_argument("--dets", default="peoplenet", help="tracks: 使う検出（bev_dets/ の下の名前）")
+    bm.add_argument("--group", help="import: 入れる群の名前（評価領域に使う）")
+    bm.add_argument("--label", default="mopf", help="import: bev_tracks/ の下の名前")
+    bm.add_argument("--tracks", help="import: MOPF の追跡の場所（既定 <結果>/mopf_tracks）")
+    bm.add_argument("--links", help="import: with-mopf の links.json（既定 <結果>/mopf_eval/links.json）")
+    bm.add_argument("--tracker", action="append", help="compare: 名前=<label>/<群>（何度でも）")
+    bm.add_argument("--area-group", help="compare: 評価領域の群（既定は最初の --tracker の群）")
+    bm.add_argument("--frames", nargs=2, type=int, help="compare: 動画のコマ [始まり, 終わり)")
     bo = sub.add_parser("bev-overlay", help="上面図と群のカメラを並べ、正解・予測・誤りを重ねた動画（bev_overlay/）")
     bo.add_argument("run_dir")
     bo.add_argument("--tracker", default="a", help="bev_tracks/ の下の名前")
@@ -244,6 +261,24 @@ def cli(argv):
                     (f"{k} {m[k]:.3f}" + (f"±{sd[k]:.3f}" if sd else "")) if isinstance(m[k], float) else f"{k} {m[k]}"
                     for k in ("IDF1", "HOTA", "MOTA", "MODA", "IDSW", "Prec", "Rec")) + (f"  ({len(r['repeats'])} 回の平均±標準偏差)" if sd else ""))
         print("out:", Path(a.run_dir).expanduser() / "bev_eval")
+    elif a.cmd == "bev-mopf":
+        from .bev import compare as mopf
+        if a.action == "tracks":
+            print("out:", mopf.camera_tracks(a.run_dir, a.cameras, a.dets))
+        elif a.action == "import":
+            if not a.group:
+                ap.error("bev-mopf import には --group が要る")
+            print("out:", mopf.import_mopf(a.run_dir, a.group, a.label, a.tracks, a.links))
+        else:
+            if not a.tracker:
+                ap.error("bev-mopf compare には --tracker 名前=<label>/<群> が要る")
+            trk = [tuple(t.split("=", 1)) if "=" in t else (t, t) for t in a.tracker]
+            res = mopf.compare(a.run_dir, trk, a.cameras, a.area_group, range(*a.frames) if a.frames else None)
+            print(f"カメラ {', '.join(res['cameras'])}・評価領域 {res['area_group']}・映った人 {res['people_seen']}")
+            for n, r in res["results"].items():
+                hr = f"{r['handover_rate']:.2f}" if r["handover_rate"] is not None else "-"
+                print(f"{n:14s} IDF1 {r['IDF1']:.3f}  MOTA {r['MOTA']:.3f}  IDSW {r['IDSW']}  Prec {r['Prec']:.3f}  Rec {r['Rec']:.3f}  "
+                      f"カメラの間の移り {r['handovers_kept']}/{r['handovers']}（{hr}）")
     elif a.cmd == "bev-overlay":
         from .bev import overlay
         print("out:", overlay(a.run_dir, a.tracker, a.group, range(*a.frames) if a.frames else None))

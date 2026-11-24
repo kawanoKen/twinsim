@@ -281,3 +281,33 @@ def test_appearance(run_dir):
     assert all(abs(H[k].sum() - 1) < 1e-2 or H[k].sum() == 0 for k in early)
     D = load_dets(folder, ["G1"], app=True)
     assert len(next(iter(D.values()))[0]) == 4
+
+
+def test_mopf_compare(run_dir):
+    """with-mopf との比べ: 1 台ずつの追跡（MOPF の代わり）→ links.json（ここではカメラの ID をそのまま全体の番号にする）→ 取り込み → 同じ画面の上で採点。"""
+    from twinsim.bev import compare as mopf
+    detect(run_dir, "gt_boxes")
+    cams = ["G1", "CamGate"]
+    tdir = mopf.camera_tracks(run_dir, cams, "gt_boxes")
+    rows = [json.loads(x) for c in cams for x in (tdir / f"{c}.jsonl").read_text().splitlines()]
+    assert rows and {"frame_id", "tracking_id", "position_x_min", "position_y_max"} <= set(rows[0])
+    tl = []
+    for c in cams:
+        per = {}
+        for x in (tdir / f"{c}.jsonl").read_text().splitlines():
+            r = json.loads(x)
+            per.setdefault(r["tracking_id"], []).append(r["frame_id"] / 10)
+        tl += [{"camera": c, "mopf_id": i, "t0": min(ts), "t1": max(ts), "global_id": f"{c}:{i}"} for i, ts in per.items()]
+    links = run_dir / "links_test.json"
+    links.write_text(json.dumps({"cameras": cams, "method": "none", "tracklets": tl}))
+    folder = mopf.import_mopf(run_dir, "gate", "mopf_test", tdir, links)
+    assert (folder / "bev.csv").exists() and all((folder / "mot" / f"{c}.txt").exists() for c in cams)
+    synthetic_tracks(run_dir, ["gate"], label="perfect_m")
+    res = mopf.compare(run_dir, [("mopf", "mopf_test/gate"), ("perfect", "perfect_m/gate")], cams)
+    m, p = res["results"]["mopf"], res["results"]["perfect"]
+    assert m["Rec"] > 0.6 and m["Prec"] > 0.8          # 正解の枠から作った検出なので、枠はよく合う
+    assert p["IDF1"] > m["IDF1"] - 0.05                  # 床の上の正解の追跡は、床の位置から作った枠でも合う
+    assert p["handovers"] == m["handovers"]
+    if p["handovers"]:
+        assert p["handover_rate"] > 0.8 and m["handover_rate"] < 0.2   # つながない 1 台ずつの追跡は、カメラの間で番号が変わる
+    assert (run_dir / "bev_eval" / "compare_G1_CamGate.json").exists()

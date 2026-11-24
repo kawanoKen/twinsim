@@ -264,6 +264,9 @@ while (ok := cap.read())[0]:
 
 | `bev_eval/per_camera.csv` | CSV | カメラごとの指標を 1 行ずつ（`label, group, camera, IDF1, MOTA, MODA, IDSW, Prec, Rec, n_gt, count_mae`）。`count_mae` はコマごとの人数の差の絶対値の平均 |
 | `bev_overlay/<追跡器>_<群>.mp4` | H.264 | `bev-overlay` の確かめの動画（上面図と群のカメラ） |
+| `mopf_tracks_<検出>/<カメラ>.jsonl`・`info.json` | JSON Lines | `bev-mopf tracks` の 1 台ずつの追跡（MOPF の `tracking.jsonl` と同じ形: `frame_id, tracking_id, position_x_min, position_y_min, position_x_max, position_y_max`。`frame_id` は `info.json` の `frame_offset` から） |
+| `bev_tracks/mopf/<群>/` | | `bev-mopf import` で入れた MOPF の結果。`mot/<カメラ>.txt` は MOPF の枠に with-mopf の全体の番号、`bev.csv` は枠の足元を床に写した点（`cov_*` は空） |
+| `bev_eval/compare_<カメラ>.json` | JSON | `bev-mopf compare`: `cameras`・`area_group`・`people_seen`・`results[名前]`（`IDF1`・`MOTA`・`IDSW`・`Prec`・`Rec`・`n_gt`・`handovers`・`handovers_found`・`handovers_kept`・`handover_rate`） |
 
 `bev_eval/<名前>_<群>.json` には、床の上の `metrics` のほかに次も入ります（どれも評価のコマだけ）。
 
