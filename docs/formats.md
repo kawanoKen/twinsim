@@ -60,6 +60,7 @@ def project(cam, pts):                       # pts: (N, 3) 世界の座標 → (
 | `tracks[名前]` | `[[x, y, yaw], …]`。k 番目は `people[名前].start_frame + k` のコマ（現れてから消えるまで） |
 | `moving[名前]` | `[0/1, …]`。そのコマに歩いているか（`tracks` と同じ長さ）。0.3 秒でならした速さが 0.2 m/s を超えたら 1、0.1 m/s を下回るか 2 コマ続けてほとんど動かなければ 0（2026-11-08 から。前は 1 コマの一歩が 0.2 m/s を超えたか）。`yaw` は歩いている間、ならした速さの向きへ回る |
 | `cameras[名前]` | カメラ（0 の表し方） |
+| `camera_groups[群]` | シナリオの `camera_groups`（視野の重なるカメラの群 `cameras` と評価領域 `area`）。書かなければ `{}` |
 | `gate_events` | `[{t, gate, lane, person, dir: in/out}]`。ゲートを通った時刻 |
 | `elevator_events` | `[{t, car, boarded: [名前], alighted: [名前]}]`。EV が着いた時刻と、乗った人・降りた人 |
 | `elevator_times`・`cars`・`spots`・`door` | EV の着く時刻、号機の扉の位置・定員、EV 待ちの立つ場所 |

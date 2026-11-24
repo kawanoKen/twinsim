@@ -13,7 +13,7 @@ YAML works in the same form. Coordinates are world coordinates (m, Z up), and ti
 | People | [`space`](#space), [`people`](#people), [`demand`](#demand) |
 | Streams | [`streams[]`](#streams), [`origin`](#origin), [`rate`](#rate), [`destinations[]`](#destinations), [`meet`](#meet) |
 | Facilities | [`elevator`](#elevator), [`schedule`](#schedule), [`alight`](#alight), [`gates`](#gates), [`services`](#services), [`rooms`](#rooms) |
-| Cameras and outputs | [`cameras[]`](#cameras), [`render`](#render), [`outputs`](#outputs) |
+| Cameras and outputs | [`cameras[]`](#cameras), [`camera_groups`](#camera-groups), [`render`](#render), [`outputs`](#outputs) |
 | Comparing and checking | [`variants`](#variants), [`validity`](#validity) |
 | Others | [`graph` and more](#others) |
 | Common | [Distributions](#distributions), [place names](#places), [checks before simulating](#checks) |
@@ -38,6 +38,7 @@ Only `space` is required. Any key not listed here is an error.
 | [`services`](#services) | object | `{}` | Service time and calling per counter (from 1.2) |
 | [`rooms`](#rooms) | object | `{}` | Time inside, capacity and calling per room (from 1.2) |
 | [`cameras`](#cameras) | array | `[]` | Cameras |
+| [`camera_groups`](#camera-groups) | object | none | Groups of cameras with overlapping views and their evaluation areas (for multi-camera tracking and evaluation) |
 | [`render`](#render) | object | see below | Rendering |
 | [`outputs`](#outputs) | array | all | What to write |
 | [`variants`, `variant`](#variants) | object, string | none | Comparing conditions |
@@ -344,6 +345,27 @@ Values added to a candidate name override only those values.
 ]
 ```
 
+<a id="camera-groups"></a>
+
+## `camera_groups`
+
+Groups of cameras whose views overlap, and the floor area evaluated for each group. Used when multi-camera tracking is built and compared with the ground truth per group.
+The simulation result does not change. The values are kept as they are in `camera_groups` of `ground_truth.json` (`{}` when not given).
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `<group name>.cameras` | array | required | Names of the group's cameras (must be in `cameras[]`) |
+| `<group name>.area` | `[[x, y], ...]` | none | Evaluation area polygon (world metres, 3 or more points). What happens without it is up to the tool that uses it |
+| `<group name>.note` | string | none | Note |
+
+```json
+"cameras": [{"name": "CamGate"}, {"name": "CamLobby"}, {"name": "CamEV"}],
+"camera_groups": {
+  "lobby": {"cameras": ["CamGate", "CamLobby"], "area": [[-6.0, -6.0], [4.0, -6.0], [4.0, 10.0], [-6.0, 10.0]]},
+  "ev":    {"cameras": ["CamEV"]}
+}
+```
+
 <a id="render"></a>
 
 ## `render`
@@ -459,7 +481,7 @@ The office map is in the [tutorial](config-tutorial.en.md#origin).
 
 | Check | Examples |
 |---|---|
-| Unknown keys | Top-level keys and keys in `cameras[]` |
+| Unknown keys | Top-level keys and keys in `cameras[]` and `camera_groups.<group>` |
 | Value ranges | `duration_s` is positive, `fps` is a positive integer, `seed` is an integer, `mot_stride`, `graph.cell_m` is a multiple of the space's grid, values of `outputs` and `render.tint` |
 | Names | `name` and camera names use only letters, digits, `_` and `-` (they become file names) |
 | Place names | `origin`, `to`, `via`, `meet.via`, `cars`, keys of `gates` and `render.props` exist in the space; `via` is a gate; `cars` are elevators |
@@ -467,6 +489,7 @@ The office map is in the [tutorial](config-tutorial.en.md#origin).
 | Spelling of kinds | `type` of `rate` and `schedule`; `variant` exists in `variants` |
 | Coordinates | Form of `origin` and `meet.from`; inside the walkable area; destinations reachable, including from both ends of a line |
 | Cameras | `name`; form of `eye` and `target`; no duplicate names; `eye` differs from `target`; below the ceiling (above it, people who are not in the picture would get ground-truth boxes) |
+| Camera groups | Group names; `cameras` exist in `cameras[]` with no camera twice; `area` is a polygon with 3 or more points |
 | Combinations | `aicity` needs `mot`; `meet` can only be written on a stream's top-level destination |
 
 These are not checked.

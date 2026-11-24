@@ -39,7 +39,8 @@ DEFAULTS = {
 OUTPUTS = ("ground_truth", "frames", "tasks", "graph", "mot", "aicity", "preview", "validity")
 # 設定の一番上のキー（docs/spec.md）。綴りの誤りを既定の値のまま黙って動かさないように、ほかのキーは誤りにする
 CONFIG_KEYS = set(DEFAULTS) | {"name", "title", "title_en", "description", "space", "demand", "elevator", "validity", "variants", "variant", "graph",
-                               "mot_stride", "congestion_levels", "calibration", "services", "rooms"}
+                               "mot_stride", "congestion_levels", "calibration", "services", "rooms",
+                               "camera_groups"}
 SERVICE_KEYS = {"service_s", "servers", "call", "wait", "queue", "state", "note"}  # 設定の services.<窓口>（1.2、components.py）
 ROOM_KEYS = {"stay_s", "capacity", "call", "wait", "note"}  # 設定の rooms.<部屋>
 COMPONENT_KINDS = ("service", "room", "seats")
@@ -74,6 +75,7 @@ def seats_of(poi, furniture=True):
         out += [((x0 + (x1 - x0) * k / max(n - 1, 1), y0 + (y1 - y0) * k / max(n - 1, 1)), float(r["yaw"])) for k in range(n)]
     return out
 CAMERA_KEYS = {"name", "eye", "target", "focal_mm", "h_aperture_mm", "width", "height", "clock_offset_s", "drop_rate", "note"}
+GROUP_KEYS = {"cameras", "area", "note"}  # camera_groups.<群>（視野の重なるカメラの組と評価領域。複数カメラの追跡・評価が使う）
 ORIGIN_FORMS = '場所の名前か、{"xy": [x, y]}・{"line": [[x0, y0], [x1, y1]]}'
 
 
@@ -436,10 +438,39 @@ def validate(spec):
         elif space.spec.get("ceiling_m") and float(full["eye"][2]) - space.z >= float(space.spec["ceiling_m"]) - 0.05:
             # 正解の枠は天井を知らないので、天井より上のカメラでは、映っていない人に枠が付いてしまう
             errs.append(f"cameras: {n} の高さ {float(full['eye'][2]) - space.z:g} m が、空間 {space.name} の天井（{space.spec['ceiling_m']} m）以上")
+    errs += camera_group_errors(spec.get("camera_groups"), names)
     if spec["render"].get("tint") not in ("per_person", False, None):
         errs.append(f"render.tint は per_person か false（今は {spec['render'].get('tint')!r}）")
     if errs:
         raise ValueError("シナリオの誤り:\n  " + "\n  ".join(errs))
+
+
+def camera_group_errors(groups, camera_names):
+    """camera_groups の誤り（群の名前・知らないキー・cameras[] にないカメラ・評価領域の多角形）。"""
+    if groups is None:
+        return []
+    if not isinstance(groups, dict):
+        return ["camera_groups は {群の名前: {cameras: [...], area: [[x, y], ...]}}"]
+    errs = []
+    for g, v in groups.items():
+        if not is_safe_name(g):
+            errs.append(f"camera_groups: 名前に使えるのは文字・数字・_・- だけ（今は {g!r}）")
+            continue
+        if not isinstance(v, dict):
+            errs.append(f"camera_groups: {g} は {{cameras: [...], area: [...]}}")
+            continue
+        errs += [f"camera_groups: {g} に知らないキー {k}（使えるのは {', '.join(sorted(GROUP_KEYS))}）" for k in v if k not in GROUP_KEYS]
+        cams = v.get("cameras")
+        if not isinstance(cams, list) or not cams or not all(isinstance(c, str) for c in cams):
+            errs.append(f"camera_groups: {g} の cameras はカメラの名前の配列（1 台以上）")
+        else:
+            errs += [f"camera_groups: {g} のカメラ {c} が cameras[] にない" for c in cams if c not in camera_names]
+            errs += [f"camera_groups: {g} にカメラ {c} が 2 回ある" for c in sorted(set(cams)) if cams.count(c) > 1]
+        area = v.get("area")
+        if area is not None and not (isinstance(area, list) and len(area) >= 3 and all(
+                isinstance(p, (list, tuple)) and len(p) == 2 and all(isinstance(q, (int, float)) and not isinstance(q, bool) for q in p) for p in area)):
+            errs.append(f"camera_groups: {g} の area は 3 点以上の多角形 [[x, y], ...]（世界の m）")
+    return errs
 
 
 def wait_spots(space, poi):
