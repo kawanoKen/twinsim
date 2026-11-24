@@ -27,6 +27,7 @@ uv run python examples/06_detection_dataset.py
 | [06_detection_dataset.py](06_detection_dataset.py) | Make an object detection training set (YOLO format) from the videos and labels | None | A few seconds |
 | [07_move_origin_and_camera.py](07_move_origin_and_camera.py) | Change where people appear with coordinates, and move or add cameras | None | A few seconds |
 | [08_space_from_polygons.py](08_space_from_polygons.py) | Write your own space as polygons (outline and holes), build it in Python and pass it in; check it on a plan (from 1.2) | None | About 10 s |
+| [09_bev_tracking.py](09_bev_tracking.py) | Write a group of overlapping cameras into the configuration, run floor-plane tracking (A) on detections made from the ground-truth boxes and score it (floor plane, per camera, counts; [docs/bev-tracking.en.md](../docs/bev-tracking.en.md)) | None | About 10 s |
 
 ## Frame numbers
 

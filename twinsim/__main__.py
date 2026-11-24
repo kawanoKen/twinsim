@@ -15,6 +15,14 @@
   python -m twinsim serve [--port 8770] [--url]       GUI と REST API（127.0.0.1 だけ、トークンつき）
   python -m twinsim show-space <空間> [--out 図.png]   真上の図に歩ける所・目盛り・候補・場所・ゾーンを重ねた図（spaces/<名前>/annotate.png）。
                                                    空間は名前・フォルダ・YAML か JSON のファイル。真上の図のない空間は、歩ける所の格子から平面図を描く
+  python -m twinsim bev-detect <結果の場所> [--detector gt_boxes|peoplenet|external] [--gpu 番号] [--group 群] [--name 名前] [--source 場所] [--miss 0.1 ...]
+                                                各カメラの人の枠（bev_dets/<名前>/）。gt_boxes は正解の枠から（GPU なし）
+  python -m twinsim bev-track <結果の場所> [--tracker a|mv3dt] [--group 群] [--dets 検出] [--preset 名前] [--param key=value ...] [--label 名前]
+                                                群ごとの床の上の追跡（bev_tracks/<名前>/<群>/）
+  python -m twinsim bev-eval <結果の場所> [--tracker 名前] [--group 群] [--frames 始まり 終わり] [--vis-min 0.4] [--portal-s 1.0]
+                                                床の上の追跡を正解と比べる（bev_eval/・カメラごと・人数・集計）
+  python -m twinsim bev-overlay <結果の場所> [--tracker 名前] [--group 群] [--frames 始まり 終わり]
+                                                上面図とカメラを並べ、正解・予測・誤りを重ねた動画（bev_overlay/）
 --set の例: --set duration_s=60 --set seed=3 --set streams.0.rate.per_min=20
 """
 
@@ -106,6 +114,49 @@ def cli(argv):
     ex.add_argument("--usd", required=True)
     ex.add_argument("--region", nargs=6, type=float, required=True)
     ex.add_argument("--res", type=float, default=0.25)
+    bd = sub.add_parser("bev-detect")
+    bd.add_argument("run_dir")
+    bd.add_argument("--detector", default="gt_boxes")
+    bd.add_argument("--group", action="append", help="群（何度でも。既定は全部）")
+    bd.add_argument("--name", help="bev_dets/ の下の名前（既定は検出器の名前）")
+    bd.add_argument("--source", help="external: 同じ形の CSV（<カメラ>.txt）のフォルダ")
+    bd.add_argument("--vis-min", type=float, default=0.4)
+    bd.add_argument("--jitter-px", type=float, default=0.0)
+    bd.add_argument("--miss", type=float, default=0.0)
+    bd.add_argument("--fp-per-frame", type=float, default=0.0)
+    bd.add_argument("--seed", type=int, default=0)
+    bd.add_argument("--gpu", type=int, help="peoplenet: 使う GPU の番号（nvidia-smi で空きを見てから）")
+    bd.add_argument("--models", help="peoplenet: モデルの置き場所（既定は TWINSIM_DEEPSTREAM_MODELS）")
+    bd.add_argument("--image", help="peoplenet: DeepStream のコンテナ（既定は TWINSIM_DEEPSTREAM_IMAGE）")
+    bd.add_argument("--keep-raw", action="store_true", help="peoplenet: DeepStream の KITTI の出力を消さずに残す")
+    bt = sub.add_parser("bev-track")
+    bt.add_argument("run_dir")
+    bt.add_argument("--tracker", default="a")
+    bt.add_argument("--group", action="append")
+    bt.add_argument("--dets", default="gt_boxes")
+    bt.add_argument("--preset", help="twinsim/bev/presets/<名前>.json（A の既定は default）")
+    bt.add_argument("--param", action="append", help="設定を上書き（key=value）")
+    bt.add_argument("--label", help="bev_tracks/ の下の名前（既定は追跡器の名前）")
+    bt.add_argument("--repeats", type=int, default=1, help="何回動かすか（2 以上なら <名前>_r1, _r2, …。実行ごとにぶれる MV3DT 向け）")
+    bt.add_argument("--perturb", action="store_true", help="A: 設定を少し揺らした 15 通り（<名前>_p0 〜 _p14）。bev-eval で平均と標準偏差")
+    bt.add_argument("--gpu", type=int, help="mv3dt: 使う GPU の番号（nvidia-smi で空きを見てから）")
+    bt.add_argument("--models", help="mv3dt: モデルの置き場所（既定は TWINSIM_DEEPSTREAM_MODELS）")
+    bt.add_argument("--image", help="mv3dt: DeepStream のコンテナ（既定は TWINSIM_DEEPSTREAM_IMAGE）")
+    bt.add_argument("--keep-raw", action="store_true", help="mv3dt: DeepStream の KITTI の出力を消さずに残す")
+    be = sub.add_parser("bev-eval")
+    be.add_argument("run_dir")
+    be.add_argument("--tracker", default="a", help="bev_tracks/ の下の名前")
+    be.add_argument("--group", action="append")
+    be.add_argument("--frames", nargs=2, type=int, help="評価する動画のコマ [始まり, 終わり)")
+    be.add_argument("--vis-min", type=float, default=0.4, help="群のどのカメラでもこれ未満しか見えない人は判定しない（負の数で使わない）")
+    be.add_argument("--portal-s", type=float, default=1.0, help="評価領域の中で現れた・消えた人の前後この秒は判定しない（0 で使わない）")
+    be.add_argument("--kind", default="online", choices=["online", "corrected"])
+    be.add_argument("--label", help="bev_eval/ の結果の名前（既定は --tracker）")
+    bo = sub.add_parser("bev-overlay", help="上面図と群のカメラを並べ、正解・予測・誤りを重ねた動画（bev_overlay/）")
+    bo.add_argument("run_dir")
+    bo.add_argument("--tracker", default="a", help="bev_tracks/ の下の名前")
+    bo.add_argument("--group", help="群（既定は最初の群）")
+    bo.add_argument("--frames", nargs=2, type=int, help="動画のコマ [始まり, 終わり)")
     a = ap.parse_args(argv)
     if a.cmd == "spaces":
         print("\n".join(list_spaces()))
@@ -168,6 +219,34 @@ def cli(argv):
                 for name, y in items:
                     print(f"{part:18s} {name:28s} {y.get('verdict', '-'):4s} {y.get('note', '')}")
         print("validity:", Path(a.run_dir).expanduser() / "validity.md")
+    elif a.cmd == "bev-detect":
+        from .bev import detect
+        opts = ({"vis_min": a.vis_min, "jitter_px": a.jitter_px, "miss": a.miss, "fp_per_frame": a.fp_per_frame} if a.detector == "gt_boxes" else
+                {"gpu": a.gpu, "models": a.models, "image": a.image, "keep_raw": a.keep_raw} if a.detector == "peoplenet" else {})
+        out, info = detect(a.run_dir, a.detector, a.group, name=a.name, source=a.source, seed=a.seed, **opts)
+        print(json.dumps({k: info[k] for k in ("detector", "cameras", "boxes", "elapsed_s")}, ensure_ascii=False))
+        print("out:", out)
+    elif a.cmd == "bev-track":
+        from .bev import track
+        params = {k: yaml.safe_load(v) for k, v in (it.split("=", 1) for it in a.param or [])}
+        offline = {k: v for k, v in (("gpu", a.gpu), ("models", a.models), ("image", a.image), ("keep_raw", a.keep_raw or None)) if v is not None}
+        for g, info in track(a.run_dir, a.tracker, a.group, a.dets, a.preset, params, a.label, a.repeats, a.perturb, **offline).items():
+            print(json.dumps({"group": g, **{k: info[k] for k in ("tracker", "preset", "points", "ids", "ms_per_frame")}}, ensure_ascii=False))
+    elif a.cmd == "bev-eval":
+        from .bev import evaluate
+        frames = range(*a.frames) if a.frames else None
+        res = evaluate(a.run_dir, a.tracker, a.group, vis_min=None if a.vis_min < 0 else a.vis_min, portal_s=a.portal_s, frames=frames,
+                       kind=a.kind, label=a.label)
+        for g, r in res.items():
+            for thr, m in r["metrics"].items():
+                sd = r.get("std", {}).get(thr)
+                print(f"{r['label']:12s} {g:10s} {thr:5s} " + " ".join(
+                    (f"{k} {m[k]:.3f}" + (f"±{sd[k]:.3f}" if sd else "")) if isinstance(m[k], float) else f"{k} {m[k]}"
+                    for k in ("IDF1", "HOTA", "MOTA", "MODA", "IDSW", "Prec", "Rec")) + (f"  ({len(r['repeats'])} 回の平均±標準偏差)" if sd else ""))
+        print("out:", Path(a.run_dir).expanduser() / "bev_eval")
+    elif a.cmd == "bev-overlay":
+        from .bev import overlay
+        print("out:", overlay(a.run_dir, a.tracker, a.group, range(*a.frames) if a.frames else None))
     elif a.cmd == "run":
         over = parse_set(a.set)
         streams = over.pop("streams", {})

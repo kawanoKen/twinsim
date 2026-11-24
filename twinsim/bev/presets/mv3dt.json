@@ -1,0 +1,6 @@
+{
+ "tracker": "mv3dt",
+ "note": "公式の見本の設定そのまま（presets/mv3dt_tracker.yml）。検出は DeepStream の既定（外の実験の MV3DT の値）",
+ "note_en": "The official sample settings as they are (presets/mv3dt_tracker.yml); the detector uses DeepStream's defaults (the MV3DT values of the earlier experiment)",
+ "params": {"pgie": {}, "tracker": {}}
+}

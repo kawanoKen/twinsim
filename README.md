@@ -37,6 +37,8 @@ Python 3.10 以上。依存は numpy・scipy・pyyaml・pillow・networkx・matp
 git clone https://github.com/fujisawa-yoshihiko/twinsim.git && cd twinsim && uv sync
 ```
 
+床の上の追跡（`twinsim bev-*`）で A の窓最適化に見え方（胴の色）を使うときは、OpenCV も入れる: `uv sync --extra bev`。
+
 ## 版
 
 | 版 | 中身 | リリースノート（実装・変更と確かめた結果） |
@@ -81,6 +83,7 @@ twinsim validate config.json             # 設定の確かめ（計算しない�
 twinsim run config.json --out runs/test  # 計算（CPU、5 分・約 100 人で 20 秒ほど）
 twinsim check runs/test                  # 確かめ（壁の中・人の近さと、文献との比べ validity.md・png）
 twinsim calibrate config.json --gate-log gate_log.csv --ev-log ev_log.csv   # 実データで合わせる
+twinsim bev-detect runs/test && twinsim bev-track runs/test && twinsim bev-eval runs/test   # 床の上の複数カメラの追跡と評価（docs/bev-tracking.md）
 ```
 
 このリポジトリの中では `./run.sh <コマンド>`（結果の既定の置き場所は `~/dt-data/twinsim/runs/`）。
@@ -146,6 +149,7 @@ office・カメラ 1 台・300 コマ（映る人 25 人ほど）を本数と同
 | `mot/<カメラ>.txt`・`mot/ids.json` | MOTChallenge | `frame, id, x, y, w, h, 1, 1, visibility`（コマは 1 始まり、id はカメラをまたいで同じ。計算だけで作る近似） |
 | `labels/<カメラ>.csv`・`_mot.txt` | CSV・MOTChallenge | 描画から出した人ごとの枠（見えている部分・全身）と `visibility`・`occlusion`・`truncation`・`portal`・`glass`（すりガラスの奥の割合）（`render --labels` のとき。名前を確かめた数は `identity.json`） |
 | `aicity/gt.txt` | AI City の MTMC | `camera_id obj_id frame_id xmin ymin width height xworld yworld` |
+| `bev_tracks/<追跡器>/<群>/bev.csv` など | CSV・JSON・mp4 | 床の上の複数カメラの追跡（`twinsim bev-detect`・`bev-track`・`bev-eval`・`bev-overlay` が書く。検出・軌跡（正解と同じ形の `mot/`・`aicity/`・`graph/`・`tasks.json` も）・評価（床の上・カメラごと・集計）・確かめの動画。[docs/bev-tracking.md](docs/bev-tracking.md)） |
 | `video/<カメラ>.mp4` | H.264 | 描いた映像（1280×720・30 fps）。k コマ目 = `render_log.json` の `frames[0]` ＋ k |
 | `tasks.json` | JSON | 6 つのタスクの正解（人数・ゲートの通過・滞留・グループ・混雑・行き先、EV の待ち） |
 | `graph/` | JSON・CSV・NPZ・GraphML | ゾーンのグラフ・2 m の格子のグラフ、秒ごとの人数・1 分ごとの流れ、カメラから見える所 |
@@ -174,6 +178,7 @@ office・カメラ 1 台・300 コマ（映る人 25 人ほど）を本数と同
 | `twinsim/outputs.py`・`camera.py`・`quality.py` | 正解・集計・グラフ・枠・確かめ |
 | `twinsim/server.py`・`static/` | GUI と REST API |
 | `twinsim/isaac_bridge.py`・`isaac/` | Isaac Sim での描画と、USD から空間を作る部品 |
+| `twinsim/bev/` | 床の上の複数カメラの追跡（カメラの群・検出・追跡器 A・MV3DT・評価。使い方 docs/bev-tracking.md、設計と with-mopf との違い docs/bev-design.md） |
 | `twinsim/spaces/` | 空間（office・hospital・warehouse・simple_room・warehouse_small・corridor・corridor_door） |
 | `twinsim/templates/` | テンプレート（下の表） |
 | `twinsim/config.py` | 置き場所（`TWINSIM_DATA`・`TWINSIM_SPACES`・`TWINSIM_ISAAC_WORK` などの環境変数で変えられる） |

@@ -50,6 +50,7 @@ def project(cam, pts):                       # pts: (N, 3) 世界の座標 → (
 | `logs/` | ゲートの通過記録・EV の運行記録（実データと同じ形）。`twinsim export-logs <結果>` で作る | 実データで合わせる（`calibrate`）の見本 |
 | `summary.json`・`scenario_resolved.json`・`.yaml` | 要約（人数・人の動き `motion`・着いたのに終わりまで外で待った人 `outside_at_end` など）と、既定を足したシナリオ（乱数の種を含む） | 作り直し・記録 |
 | `validity.*`・`preview.png` | 文献との比べ・確認の図 | 人の分布の妥当性 |
+| `calib/`・`bev_dets/`・`bev_tracks/`・`bev_eval/`・`bev_overlay/` | 床の上の複数カメラの追跡の投影行列・検出・追跡・評価（`twinsim bev-*` が書く。[12](#bev)） | 複数カメラの追跡の比べ |
 
 ## 2. `ground_truth.json`
 
@@ -235,3 +236,51 @@ while (ok := cap.read())[0]:
 | `ev_log.csv` | `time_s, car, boarded, alighted` |
 
 時刻は 2 つの記録の早い方を 0 にそろえる。形の見本は `twinsim export-logs <結果>` で作れる。
+
+<a id="bev"></a>
+
+## 12. 床の上の追跡（`twinsim bev-*` が書くもの）
+
+視野の重なるカメラの群（シナリオの `camera_groups`）ごとに、床の上（真上から見た図）の複数カメラの追跡を作って比べる。手順は [bev-tracking.md](bev-tracking.md)。
+コマは動画の 0 始まり（描画したなら `render_log.json` の `frames[0]` から数える。描画していなければシミュレータのコマ）。座標は世界の m。
+
+| ファイル | 形 | 中身 |
+|---|---|---|
+| `calib/<カメラ>.json` | JSON | `P`（3×4。世界の m → 画素）・`K`・`width`・`height`・`fps`・`eye`（`twinsim.bev.write_calib`） |
+| `bev_dets/<検出器>/<カメラ>.txt` | CSV | `frame, x1, y1, x2, y2, conf`（見出しの行つき。枠は画素、小数 6 桁まで。コマは動画の 0 始まり） |
+| `bev_dets/<検出器>/run.json` | JSON | 検出器・設定・`frame_offset`（動画の 0 コマ目のシミュレータのコマ）・かかった時間・`version`（twinsim の版と git のハッシュ）。`peoplenet` は `deepstream`（コンテナ・モデル・検出の設定・GPU・群ごとの時間）も |
+| `bev_dets/<検出器>/app_<カメラ>.npy`・`app.json` | NumPy | A の窓最適化の見え方: 検出の行ごとの胴の HSV の色のヒストグラム（8 × 4 × 4 = 128、合計 1、float16。行は `<カメラ>.txt` と同じ順）。初めて使うときに作る |
+| `bev_dets/peoplenet/_deepstream/<番号>/` | テキスト | `peoplenet` が群ごとに DeepStream に渡した設定（`config_deepstream.txt`・`config_pgie.txt`）と記録（`run.log`）。`--keep-raw` なら KITTI の形の出力（`kitti/`）も |
+| `bev_tracks/<追跡器>/<群>/bev.csv` | CSV | `frame, t, id, x, y, cov_xx, cov_xy, cov_yy, n_views, kind, delay`。`t` はシミュレータの秒、`cov_*` は位置の誤差（m²）、`n_views` はそのコマで見えたカメラの数、`kind` は `online`（そのコマで出せた）か `corrected`（後から訂正した）、`delay` は出せたのが何コマ後か |
+| `bev_tracks/<追跡器>/<群>/mot/<カメラ>.txt` | MOTChallenge | カメラごとの枠。MV3DT は MV3DT が出した枠（`conf` は確信度）。A などは床の位置から作った枠（背 1.7 m・半径 0.3 m の円柱を写した箱、画面で切る）。`frame` は正解の `mot/` と同じシミュレータのコマ＋1、`conf` は 1、後ろの 2 つは −1 |
+| `bev_tracks/<追跡器>/<群>/aicity/tracks.txt`・`aicity/cameras.json` | AI City の MTMC | 正解の `aicity/gt.txt`・`aicity/cameras.json` と同じ形（`camera_id obj_id frame_id xmin ymin width height xworld yworld`）。カメラの番号は正解と同じ、`obj_id` は追跡器の ID |
+| `bev_tracks/<追跡器>/<群>/graph/zone_counts.csv`・`zone_flows.csv` | CSV | 追跡から作った、正解の `graph/` と同じ形のゾーンの人数（秒ごと）と移動（1 分ごと）。評価領域の中の点だけ |
+| `bev_tracks/<追跡器>/<群>/tasks.json` | JSON | 追跡から推定した、正解の `tasks.json` と同じ形の集計（下の表） |
+| `bev_tracks/<追跡器>/<群>/run.json` | JSON | 追跡器・群・設定（`preset` と `params`）・使った検出（MV3DT は `internal`）・1 コマあたりの時間（ms）・`version`。MV3DT は `run`（コンテナ・モデル・GPU・受け口・時間）も |
+| `bev_tracks/<名前>_r<k>/`・`<名前>_p<k>/` | | `bev-track --repeats` の k 回目・`--perturb` の k 番目の揺らし（`p0` は揺らさない。中は上と同じ） |
+| `bev_tracks/<追跡器>/<群>/_mv3dt/` | テキスト | MV3DT に渡した設定（`config_deepstream.txt`・`config_pgie.txt`・`config_tracker.yml`・`pub_sub_info_config.yml`・`config_mqtt.txt`・`camInfo/`）と記録（`run.log`・`mosquitto.log`） |
+| `bev_eval/<名前>_<群>.json` | JSON | `metrics["1m"]`・`metrics["0.5m"]`: `IDF1`・`HOTA`・`DetA`・`AssA`・`MOTA`・`MODA`・`IDSW`・`Prec`・`Rec`・`BEV_err_m`（対応した組の位置の誤差）・`TP`・`FN`・`FP`・`n_gt`・`n_gt_ids`・`n_pred_ids`。`rules`（判定しない人の決まり）・`frames`・`version` |
+| `bev_eval/summary.csv` | CSV | `bev_eval/*.json` を 1 行ずつ（`label, tracker, group, kind, threshold, IDF1, …, runs, IDF1_std, HOTA_std, MOTA_std`） |
+
+| `bev_eval/per_camera.csv` | CSV | カメラごとの指標を 1 行ずつ（`label, group, camera, IDF1, MOTA, MODA, IDSW, Prec, Rec, n_gt, count_mae`）。`count_mae` はコマごとの人数の差の絶対値の平均 |
+| `bev_overlay/<追跡器>_<群>.mp4` | H.264 | `bev-overlay` の確かめの動画（上面図と群のカメラ） |
+
+`bev_eval/<名前>_<群>.json` には、床の上の `metrics` のほかに次も入ります（どれも評価のコマだけ）。
+
+- `per_camera`: カメラごとの指標。
+- `graph`: ゾーンの人数・移動の正解との比べ。`zones_compared[ゾーン]`（`coverage`・`mean_pred`・`mean_truth`・`mae`・`bias`）、`area_count`（評価領域の人数）、`flows_compared`（`"元->先": {pred, truth}`）。
+- `tasks`: `tasks.json` の推定の正解との比べ。`gates["ゲート:in/out"]`（`truth`・`pred`・`matched`（2 秒以内の 1 対 1）・`precision`・`recall`・`lag_s`）、
+  `elevator_wait_s`（乗った人の待ち時間の `truth`・`pred` の `n`・`mean`・`median`）、`dwell[ゾーン]`（止まった区間の数と秒の合計）、`congestion[ゾーン]`（段階が合った秒の割合 `agree`）。
+
+追跡の `tasks.json` は正解の `tasks.json` と同じキーで、評価領域に入る所だけを推定します（正解の形との違い）。
+
+| キー | 推定のしかた |
+|---|---|
+| `observed` | 推定した所: `frames`（シミュレータのコマ）、`zone_coverage`（歩ける床の 6 割以上が評価領域に入るゾーンと、その割合）、`gates`（レーンが全部評価領域に入るゲート）、`cars`（扉のまわりが評価領域に入るかご） |
+| `not_estimated` | 推定しないもの: `1_count.by_state`（状態）、`4_group`、`6_trend`（現れた所・行き先は評価領域の外） |
+| `1_count` | `present` は評価領域の人数、`by_zone` は `observed` のゾーンだけ。動画の外の秒は `null` |
+| `2_direction` | レーンの中心を結ぶ線を、レーンの幅の中で横切った時刻（正解の `t` はゲートを通り始めた時刻なので、0.5 秒ほど遅れる）。`person` は追跡器の ID。ゲートを使わずにレーンを通る人（正解の `gate_events` に入らない人）も数える |
+| `3_dwell` | 止まった区間: 前後 0.5 秒の動きが 0.3 m/s 未満のひと続き（3 秒より短い動きはつなぐ）が 3 秒以上。`state` は `stop` |
+| `5_congestion` | `by_zone` の人数 ÷（ゾーンの面積 × 評価領域に入る割合）。段階の境いは正解と同じ |
+| `elevator.waits` | かごの扉から 2 m 以内で終わった軌跡（乗ったとみなす）の、初めて 1 秒以上止まった時刻から終わりまで（`wait_s`）と、乗った時刻（`board_s`） |
+`--repeats` で作った追跡（`<名前>_r1`, …）や `--perturb` で作った追跡（`<名前>_p0`, …）を `bev-eval --tracker <名前>` で評価すると、それぞれの `bev_eval/<名前>_r<k>_<群>.json` に加えて、`bev_eval/<名前>_<群>.json` の `metrics` に平均、`std` に標準偏差（不偏）、`repeats` に使った名前を書きます。

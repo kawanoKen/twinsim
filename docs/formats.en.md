@@ -50,6 +50,7 @@ No lens distortion (pinhole). Other values: `eye` and `target` (world coordinate
 | `logs/` | Gate passage logs and elevator operation logs (same format as real data). Made with `twinsim export-logs <run>` | Example for calibrating with real data (`calibrate`) |
 | `summary.json`, `scenario_resolved.json` and `.yaml` | Summary (people, motion statistics `motion`, people who arrived but were still waiting outside at the end `outside_at_end`, and so on), and the scenario with defaults filled in (including the random seed) | Regeneration, logging |
 | `validity.*` and `preview.png` | Comparison with the literature, figures for checking | Validity of the people distribution |
+| `calib/`, `bev_dets/`, `bev_tracks/`, `bev_eval/`, `bev_overlay/` | Projection matrices, detections, tracks and evaluation of multi-camera tracking on the floor plane (written by `twinsim bev-*`, [12](#bev)) | Comparing multi-camera trackers |
 
 ## 2. `ground_truth.json`
 
@@ -235,3 +236,51 @@ it computes the shortest walkable distances. The "ward execution delays" of the 
 | `ev_log.csv` | `time_s, car, boarded, alighted` |
 
 Times are aligned so that the earlier of the two logs starts at 0. `twinsim export-logs <run>` writes examples of these files.
+
+<a id="bev"></a>
+
+## 12. Floor-plane tracking (written by `twinsim bev-*`)
+
+Multi-camera tracking on the floor plane (the top view), built and compared per group of cameras with overlapping views (`camera_groups` in the scenario). See [bev-tracking.en.md](bev-tracking.en.md) for the procedure.
+Frames are 0-based video frames (counted from `frames[0]` of `render_log.json` when rendered; simulator frames otherwise). Coordinates are world metres.
+
+| File | Format | Contents |
+|---|---|---|
+| `calib/<camera>.json` | JSON | `P` (3×4, world metres → pixels), `K`, `width`, `height`, `fps`, `eye` (`twinsim.bev.write_calib`) |
+| `bev_dets/<detector>/<camera>.txt` | CSV | `frame, x1, y1, x2, y2, conf` (with a header line; boxes in pixels, up to 6 decimals; 0-based video frames) |
+| `bev_dets/<detector>/run.json` | JSON | Detector, options, `frame_offset` (simulator frame of video frame 0), elapsed time, `version` (twinsim version and git hash). For `peoplenet`, also `deepstream` (container, model, detector settings, GPU, time per group) |
+| `bev_dets/<detector>/app_<camera>.npy`, `app.json` | NumPy | Appearance for A's window optimisation: torso HSV colour histogram per detection row (8 × 4 × 4 = 128, sums to 1, float16; rows in the order of `<camera>.txt`). Made on first use |
+| `bev_dets/peoplenet/_deepstream/<number>/` | text | The configuration `peoplenet` gave DeepStream for each group (`config_deepstream.txt`, `config_pgie.txt`) and its log (`run.log`); with `--keep-raw`, also the KITTI output (`kitti/`) |
+| `bev_tracks/<tracker>/<group>/bev.csv` | CSV | `frame, t, id, x, y, cov_xx, cov_xy, cov_yy, n_views, kind, delay`. `t` is simulator seconds, `cov_*` the position uncertainty (m²), `n_views` the number of cameras that saw the person in that frame, `kind` is `online` (available at that frame) or `corrected` (revised later), `delay` how many frames later it was available |
+| `bev_tracks/<tracker>/<group>/mot/<camera>.txt` | MOTChallenge | Per-camera boxes. For MV3DT, MV3DT's own boxes (`conf` is the confidence); for A and others, boxes made from the floor positions (a cylinder 1.7 m tall with radius 0.3 m, projected and clipped to the image). `frame` is the simulator frame + 1, as in the ground-truth `mot/`; `conf` is 1, the last two are −1 |
+| `bev_tracks/<tracker>/<group>/aicity/tracks.txt`, `aicity/cameras.json` | AI City MTMC | Same format as the ground-truth `aicity/gt.txt` and `aicity/cameras.json` (`camera_id obj_id frame_id xmin ymin width height xworld yworld`). Camera numbers as in the ground truth; `obj_id` is the tracker's ID |
+| `bev_tracks/<tracker>/<group>/graph/zone_counts.csv`, `zone_flows.csv` | CSV | Zone counts (per second) and moves (per minute) made from the tracks, in the same format as the ground-truth `graph/`; points inside the evaluation area only |
+| `bev_tracks/<tracker>/<group>/tasks.json` | JSON | Aggregates estimated from the tracks, in the same format as the ground-truth `tasks.json` (table below) |
+| `bev_tracks/<tracker>/<group>/run.json` | JSON | Tracker, group, settings (`preset` and `params`), detections used (`internal` for MV3DT), time per frame (ms), `version`; for MV3DT also `run` (container, models, GPU, broker, time) |
+| `bev_tracks/<name>_r<k>/`, `<name>_p<k>/` | | Run k of `bev-track --repeats`, variant k of `--perturb` (`p0` is unperturbed; contents as above) |
+| `bev_tracks/<tracker>/<group>/_mv3dt/` | text | The configuration given to MV3DT (`config_deepstream.txt`, `config_pgie.txt`, `config_tracker.yml`, `pub_sub_info_config.yml`, `config_mqtt.txt`, `camInfo/`) and logs (`run.log`, `mosquitto.log`) |
+| `bev_eval/<name>_<group>.json` | JSON | `metrics["1m"]`, `metrics["0.5m"]`: `IDF1`, `HOTA`, `DetA`, `AssA`, `MOTA`, `MODA`, `IDSW`, `Prec`, `Rec`, `BEV_err_m` (position error of matched pairs), `TP`, `FN`, `FP`, `n_gt`, `n_gt_ids`, `n_pred_ids`; also `rules` (who is not judged), `frames`, `version` |
+| `bev_eval/summary.csv` | CSV | One row per `bev_eval/*.json` (`label, tracker, group, kind, threshold, IDF1, …, runs, IDF1_std, HOTA_std, MOTA_std`) |
+
+| `bev_eval/per_camera.csv` | CSV | One row per camera (`label, group, camera, IDF1, MOTA, MODA, IDSW, Prec, Rec, n_gt, count_mae`); `count_mae` is the mean absolute difference in counts per frame |
+| `bev_overlay/<tracker>_<group>.mp4` | H.264 | The check video of `bev-overlay` (top view and the group's cameras) |
+
+Besides the floor-plane `metrics`, `bev_eval/<name>_<group>.json` holds the following (all over the evaluated frames only).
+
+- `per_camera`: per-camera metrics.
+- `graph`: zone counts and moves compared with the ground truth: `zones_compared[zone]` (`coverage`, `mean_pred`, `mean_truth`, `mae`, `bias`), `area_count` (people in the evaluation area), `flows_compared` (`"from->to": {pred, truth}`).
+- `tasks`: the estimated `tasks.json` compared with the ground truth: `gates["gate:in/out"]` (`truth`, `pred`, `matched` (one-to-one within 2 s), `precision`, `recall`, `lag_s`),
+  `elevator_wait_s` (`n`, `mean`, `median` of the waits of people who boarded, `truth` and `pred`), `dwell[zone]` (number of stops and total seconds), `congestion[zone]` (`agree`, the share of seconds with the same level).
+
+The tracker's `tasks.json` has the same keys as the ground-truth `tasks.json` and estimates only what lies in the evaluation area (differences from the ground-truth format):
+
+| Key | How it is estimated |
+|---|---|
+| `observed` | What was estimated: `frames` (simulator frames), `zone_coverage` (zones with 60 % or more of their walkable floor inside the evaluation area, and that share), `gates` (gates whose lanes are all inside the area), `cars` (cars whose door surroundings are inside the area) |
+| `not_estimated` | Not estimated: `1_count.by_state` (states), `4_group`, `6_trend` (where people appear and go is outside the area) |
+| `1_count` | `present` is the number of people in the evaluation area; `by_zone` covers the `observed` zones only. Seconds outside the video are `null` |
+| `2_direction` | The time a track crosses the line through the lane centres within the lanes' width (the ground-truth `t` is when a person starts through the gate, so the estimate lags by about 0.5 s). `person` is the tracker's ID. People walking through the lanes without using the gate (not in the ground-truth `gate_events`) are counted too |
+| `3_dwell` | Stops: runs where the movement over ±0.5 s is below 0.3 m/s (movements shorter than 3 s are bridged), lasting 3 s or more. `state` is `stop` |
+| `5_congestion` | `by_zone` count ÷ (zone area × share inside the evaluation area). Level thresholds as in the ground truth |
+| `elevator.waits` | Tracks that end within 2 m of a car door (taken as boarding): from the first stop of 1 s or more to the end (`wait_s`), and the boarding time (`board_s`) |
+When tracks made with `--repeats` (`<name>_r1`, …) or `--perturb` (`<name>_p0`, …) are evaluated with `bev-eval --tracker <name>`, each `bev_eval/<name>_r<k>_<group>.json` is written, and `bev_eval/<name>_<group>.json` holds the mean in `metrics`, the (unbiased) standard deviation in `std` and the run names in `repeats`.

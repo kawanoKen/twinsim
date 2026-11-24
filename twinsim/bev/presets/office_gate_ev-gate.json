@@ -1,0 +1,18 @@
+{
+ "tracker": "a",
+ "note": "office_gate_ev のゲートの群（5 台、歩いて通り過ぎる）で調整した値。検出は PeopleNet",
+ "note_en": "Tuned on the gate group of office_gate_ev (5 cameras, people walk through); PeopleNet detections",
+ "params": {
+  "det_conf": 0.2,
+  "sig_ray": 0.3,
+  "sig_perp": 0.15,
+  "gate_m": 1.5,
+  "r_cluster": 1.6,
+  "r_suppress": 0.3,
+  "max_age_s": 1.0,
+  "probation_s": 0.2,
+  "sigma_a": 0.5,
+  "conf_new": 1.01,
+  "v_damp": 0.98
+ }
+}

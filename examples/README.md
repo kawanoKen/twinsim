@@ -27,6 +27,7 @@ uv run python examples/06_detection_dataset.py
 | [06_detection_dataset.py](06_detection_dataset.py) | 動画と正解ラベルから、物体検出の学習データ（YOLO の形）を作る | なし | 数秒 |
 | [07_move_origin_and_camera.py](07_move_origin_and_camera.py) | 人の現れる場所を座標で変える、カメラを動かす・足す | なし | 数秒 |
 | [08_space_from_polygons.py](08_space_from_polygons.py) | 自分の空間を多角形（外形と穴）で書き、Python で組み立てて渡す。平面図で確かめる（1.2 から） | なし | 10 秒ほど |
+| [09_bev_tracking.py](09_bev_tracking.py) | 視野の重なるカメラの群を設定に書き、正解の枠から作った検出で床の上の追跡（A）を動かして採点する（床の上・カメラごと・人数。[docs/bev-tracking.md](../docs/bev-tracking.md)） | なし | 10 秒ほど |
 
 ## コマの番号
 

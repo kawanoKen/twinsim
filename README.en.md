@@ -37,6 +37,8 @@ The examples (`examples/`) and documents are not in the package, so get the repo
 git clone https://github.com/fujisawa-yoshihiko/twinsim.git && cd twinsim && uv sync
 ```
 
+To use appearance (torso colour) in A's window optimisation for floor-plane tracking (`twinsim bev-*`), also install OpenCV: `uv sync --extra bev`.
+
 ## Versions
 
 | Version | Contents | Release notes (implementation, changes and verification) |
@@ -81,6 +83,7 @@ twinsim validate config.json             # check a configuration (does not simul
 twinsim run config.json --out runs/test  # simulate (CPU; about 20 s for 5 minutes and about 100 people)
 twinsim check runs/test                  # checks (inside walls, closeness of people) and the comparison with the literature (validity.md, png)
 twinsim calibrate config.json --gate-log gate_log.csv --ev-log ev_log.csv   # fit to real data
+twinsim bev-detect runs/test && twinsim bev-track runs/test && twinsim bev-eval runs/test   # multi-camera tracking on the floor plane and its evaluation (docs/bev-tracking.en.md)
 ```
 
 Inside this repository, use `./run.sh <command>` (results go to `~/dt-data/twinsim/runs/` by default).
@@ -146,6 +149,7 @@ Coordinates are world meters (Z up); simulator frames start at 0 (seconds = fram
 | `mot/<camera>.txt`, `mot/ids.json` | MOTChallenge | `frame, id, x, y, w, h, 1, 1, visibility` (frames start at 1; the id is the same across cameras; an approximation computed without rendering) |
 | `labels/<camera>.csv`, `_mot.txt` | CSV, MOTChallenge | Per-person boxes taken from the rendering (visible part and full body) with `visibility`, `occlusion`, `truncation`, `portal` and `glass` (share behind frosted glass) (with `render --labels`; name checks counted in `identity.json`) |
 | `aicity/gt.txt` | AI City MTMC | `camera_id obj_id frame_id xmin ymin width height xworld yworld` |
+| `bev_tracks/<tracker>/<group>/bev.csv` and others | CSV, JSON, mp4 | Multi-camera tracking on the floor plane (written by `twinsim bev-detect`, `bev-track`, `bev-eval`, `bev-overlay`: detections, trajectories (also `mot/`, `aicity/`, `graph/` and `tasks.json` in the ground-truth formats), evaluation (floor plane, per camera, aggregates), check videos; [docs/bev-tracking.en.md](docs/bev-tracking.en.md)) |
 | `video/<camera>.mp4` | H.264 | Rendered video (1280×720, 30 fps). Frame k = `frames[0]` in `render_log.json` + k |
 | `tasks.json` | JSON | Ground truth for the six tasks (counts, gate crossings, dwelling, groups, congestion, destinations, elevator waits) |
 | `graph/` | JSON, CSV, NPZ, GraphML | Zone graph and 2 m grid graph, per-second counts, per-minute flows, what each camera sees |
@@ -174,6 +178,7 @@ The sources, the check results and the assumed values are in [docs/validity.en.m
 | `twinsim/outputs.py`, `camera.py`, `quality.py` | Ground truth, aggregates, graphs, boxes, checks |
 | `twinsim/server.py`, `static/` | GUI and REST API |
 | `twinsim/isaac_bridge.py`, `isaac/` | Rendering with Isaac Sim and building spaces from USD |
+| `twinsim/bev/` | Multi-camera tracking on the floor plane (camera groups, detection, trackers A and MV3DT, evaluation; usage docs/bev-tracking.en.md, design and differences from with-mopf docs/bev-design.en.md) |
 | `twinsim/spaces/` | Spaces (office, hospital, warehouse, simple_room, warehouse_small, corridor, corridor_door) |
 | `twinsim/templates/` | Templates (table below) |
 | `twinsim/config.py` | Locations (environment variables such as `TWINSIM_DATA`, `TWINSIM_SPACES`, `TWINSIM_ISAAC_WORK`) |
